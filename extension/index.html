@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <head>
+    <link rel="stylesheet" href="index.css">
+  </head>
+</head>
+<body>
+  <h2>Select LLM model</h2>
+  <select id="modelSelect" >
+    <option value="localhost">localhost</option>
+    <option value="gemini">gemini-3.1-flash-lite</option>
+    <option value="chatgpt">gpt-5.4-mini</option>
+    <option value="deepseek">deepseek-v4-flash</option>
+    <option value="qwen">qwen3.5-flash</option>
+  </select>
+  <h2>Target Language</h2>
+  <select id="languageSelect">
+    <option value="vi">Vietnamese</option>
+    <option value="cn">Chinese</option>
+    <option value="jp">Japanese</option>
+    <option value="kr">Korean</option>
+  </select>
+  <input type="button" id="translateBtn" value="Translate">
+  <script src="index.js"></script>
+</body>
+</html>

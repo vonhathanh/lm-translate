@@ -1,0 +1,22 @@
+body { width: 250px; font-family: Arial, sans-serif; }
+h2 { color: #4285f4; font-size: 18px; }
+select {
+  padding: 4px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 100%;
+}
+
+input[type="button"] {
+  margin-top: 20px;
+  margin-bottom: 15px;
+  padding: 6px 12px;
+  font-size: 16px;
+  color: #fff;
+  background-color: #4285f4;
+  border: none;
+  border-radius: 4px;
+  width: 100%;
+  cursor: pointer;
+}

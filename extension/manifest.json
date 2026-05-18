@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "LM Translate Extension",
+  "version": "1.0",
+  "description": "A simple extension that replace google translate.",
+  "action": {
+    "default_popup": "index.html",
+    "default_icon": "logo.png"
+  },
+  "permissions": ["activeTab", "scripting"]
+}
