@@ -1,7 +1,11 @@
 from pydantic import BaseModel
 
 
-class Item(BaseModel):
-    text: str
+class HtmlPageTranslationRequest(BaseModel):
+    html: str
     model: str
-    language: str
+    target_language: str
+
+
+class TranslationOutput(BaseModel):
+    items: list[str]
