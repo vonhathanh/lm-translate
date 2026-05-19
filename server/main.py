@@ -36,7 +36,6 @@ app.add_middleware(
 
 async def translate(model: str, target_language: str, batch: list[str]):
     prompt = "Translate the following array of text to {}, return an array of translated text preserving input order. input array: {}".format(target_language, batch)
-    print(f"prompt: {prompt}")
     response = client.models.generate_content(
         model=model, 
         contents=prompt,
@@ -70,6 +69,41 @@ def create_batches(input_texts: set[str]) -> list[list[str]]:
 
     return batches
 
+def parse_text_from_html(html: str) -> tuple[BeautifulSoup, set[str]]:
+    soup = BeautifulSoup(html, "html.parser")
+    input_texts = set()
+    for element in soup.find_all():
+        direct_texts = [
+            t.strip().lower()
+            for t in element.contents
+            if isinstance(t, NavigableString) and t.strip()
+        ]
+        if direct_texts:
+            input_texts.update(direct_texts)
+    return soup, input_texts
+
+
+def map_translated_text_to_html(soup: BeautifulSoup, input_batches: list[list[str]], translate_results: list[list[str]]) -> str:
+    translated_text = {}
+    for i in range(len(translate_results)):
+        for j in range(len(input_batches[i])):
+            translated_text[input_batches[i][j]] = translate_results[i][j]
+
+    for text_node in soup.find_all(string=True):
+        normalized_text = text_node.strip().lower()
+
+        if not normalized_text or normalized_text not in translated_text:
+            continue
+
+        translated = translated_text[normalized_text]
+        # Replace text node
+        text_node.replace_with(
+            text_node.replace(text_node.text, translated)
+        )
+    
+    return str(soup)
+
+
 @app.get("/")
 def read_root():
     return {"Hello": "World"}
@@ -84,52 +118,14 @@ async def translate_html_page(request: HtmlPageTranslationRequest):
     # map the translated text back to the original html structure using the input text
     # batch the translation requests to the translation API based on total token count (max 10000 tokens per batch)
     # support send multiple batches to different/same translation API endpoints in parallel
-    soup = BeautifulSoup(request.html, "html.parser")
-    input_texts = set()
-    for element in soup.find_all():
-        direct_texts = [
-            t.strip().lower()
-            for t in element.contents
-            if isinstance(t, NavigableString) and t.strip()
-        ]
-        if direct_texts:
-            input_texts.update(direct_texts)
-    print(f"input_texts: {input_texts}")
+    soup, input_texts = parse_text_from_html(request.html)
 
     batches = create_batches(input_texts)
-
-    print(f"created {len(batches)} batches")
 
     tasks = [translate(request.model, request.target_language, batch) for batch in batches]
 
     results = await asyncio.gather(*tasks)
-    
-    for res in results:
-        print(f"translation result: {res}")
 
-    translated_text = {}
-    for i, result in enumerate(results):
-        for j in range(len(batches[i])):
-            translated_text[batches[i][j]] = result[j]
-
-    print(f"translated_text: {translated_text}")
-
-    for text_node in soup.find_all(string=True):
-        normalized_text = text_node.strip().lower()
-
-        if not normalized_text:
-            continue
-
-        print(f"processing text node: '{normalized_text}'")
-
-        if normalized_text in translated_text:
-            translated = translated_text[normalized_text]
-
-            # Replace text node
-            text_node.replace_with(
-                text_node.replace(text_node.text, translated)
-            )
-
-    new_html = str(soup)
+    new_html = map_translated_text_to_html(soup, batches, results)
 
     return {"translatedText": new_html}
