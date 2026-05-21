@@ -6,3 +6,4 @@ TODOs:
 1. Add openai client
 2. Add qwen client
 3. Test qidian.com :D
+4. Add progress bar for translate btn
