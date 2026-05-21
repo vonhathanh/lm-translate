@@ -1,17 +1,14 @@
 import asyncio
-import os
 import re
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from bs4 import BeautifulSoup, NavigableString
-from google import genai
-from google.genai import types
 
 from dotenv import load_dotenv
 
-from dto import HtmlPageTranslationRequest, TranslationOutput
-from translation_service import TRANSLATION_PROMPT
+from dto import HtmlPageTranslationRequest
+from translation_service import LLMClient
 
 load_dotenv() 
 
@@ -20,7 +17,7 @@ MAX_TOKENS_PER_BATCH = 500
 
 
 app = FastAPI()
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+llm_client = LLMClient()
 
 
 # Define the origins that are allowed to make requests
@@ -35,22 +32,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-async def translate(model: str, target_language: str, batch: list[str]):
-    prompt = TRANSLATION_PROMPT.format(target_language, batch)
-    response = client.models.generate_content(
-        model=model, 
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=TranslationOutput,
-        ),
-    )
-    parsed: TranslationOutput = response.parsed
-    print(f"Translated batch: {parsed.items}, len: {len(parsed.items)}, input batch len: {len(batch)}")
-    return parsed.items
-
 
 def create_batches(input_texts: set[str]) -> list[list[str]]:
     batches = []
@@ -109,7 +90,6 @@ def parse_text_from_html(html: str) -> tuple[BeautifulSoup, set[str]]:
         ]
         if direct_texts:
             input_texts.update(direct_texts)
-    print(f"{input_texts=}, total unique text nodes to translate: {len(input_texts)}")
     return soup, input_texts
 
 
@@ -153,13 +133,13 @@ async def translate_html_page(request: HtmlPageTranslationRequest):
 
     batches = create_batches(input_texts)
 
-    tasks = [translate(request.model, request.target_language, batch) for batch in batches]
+    tasks = [llm_client.translate(request.model, request.target_language, batch) for batch in batches]
 
     results = await asyncio.gather(*tasks)
+    
+    if not results or all(result is None for result in results):
+        return {"translatedText": None}
 
     new_html = map_translated_text_to_html(soup, batches, results)
-
-    print(f"input html: {request.html[:500]}...")
-    print(f"translated html: {new_html[:500]}...")
 
     return {"translatedText": new_html}
