@@ -1,5 +1,6 @@
 import asyncio
 import os
+import re
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,11 +11,12 @@ from google.genai import types
 from dotenv import load_dotenv
 
 from dto import HtmlPageTranslationRequest, TranslationOutput
+from translation_service import TRANSLATION_PROMPT
 
 load_dotenv() 
 
 
-MAX_TOKENS_PER_BATCH = 2000
+MAX_TOKENS_PER_BATCH = 500
 
 
 app = FastAPI()
@@ -34,8 +36,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 async def translate(model: str, target_language: str, batch: list[str]):
-    prompt = "Translate the following array of text to {}, return an array of translated text preserving input order. input array: {}".format(target_language, batch)
+    prompt = TRANSLATION_PROMPT.format(target_language, batch)
     response = client.models.generate_content(
         model=model, 
         contents=prompt,
@@ -45,6 +48,7 @@ async def translate(model: str, target_language: str, batch: list[str]):
         ),
     )
     parsed: TranslationOutput = response.parsed
+    print(f"Translated batch: {parsed.items}, len: {len(parsed.items)}, input batch len: {len(batch)}")
     return parsed.items
 
 
@@ -67,19 +71,45 @@ def create_batches(input_texts: set[str]) -> list[list[str]]:
     if current_batch:
         batches.append(current_batch)
 
+    print(f"Created {len(batches)} batches from {len(input_texts)} unique input texts.")
+
     return batches
 
+
 def parse_text_from_html(html: str) -> tuple[BeautifulSoup, set[str]]:
+    """
+    \d → digits (0-9)
+    \W → non-word characters (special characters)
+    _ → underscore (because _ is considered a word character in regex)
+    + → one or more characters
+    ^...$ → match the whole string
+
+    This matches:
+        only numbers → "12345"
+        only special chars → "@#$%"
+        mix of numbers + special chars → "123@#"
+
+    This does NOT match:
+        English letters → "abc"
+        Vietnamese → "xin chào"
+        Chinese → "你好"
+        Japanese → "こんにちは"
+    """
+    PATTERN = r'^[\d\W_]+$'
+
     soup = BeautifulSoup(html, "html.parser")
     input_texts = set()
     for element in soup.find_all():
+        if element.name in ["script", "style"]:
+            continue
         direct_texts = [
             t.strip().lower()
             for t in element.contents
-            if isinstance(t, NavigableString) and t.strip()
+            if isinstance(t, NavigableString) and t.strip() and not bool(re.match(PATTERN, t.strip()))
         ]
         if direct_texts:
             input_texts.update(direct_texts)
+    print(f"{input_texts=}, total unique text nodes to translate: {len(input_texts)}")
     return soup, input_texts
 
 
@@ -109,8 +139,9 @@ def read_root():
     return {"Hello": "World"}
 
 
-@app.post("/api/v1/translate/html")
+@app.post("/api/v1/translate-html")
 async def translate_html_page(request: HtmlPageTranslationRequest):
+    print("Received translation request for model:", request.model, "and target language:", request.target_language)
     # TODO: benchmark html parsers: lxlm, selectolax
     # parse html and extract text
     # normalize (trim, lowercase) then dedup the text to be translated
@@ -127,5 +158,8 @@ async def translate_html_page(request: HtmlPageTranslationRequest):
     results = await asyncio.gather(*tasks)
 
     new_html = map_translated_text_to_html(soup, batches, results)
+
+    print(f"input html: {request.html[:500]}...")
+    print(f"translated html: {new_html[:500]}...")
 
     return {"translatedText": new_html}
