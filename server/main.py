@@ -1,5 +1,6 @@
 import asyncio
 import re
+import time
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -133,9 +134,13 @@ async def translate_html_page(request: HtmlPageTranslationRequest):
 
     batches = create_batches(input_texts)
 
-    tasks = [llm_client.translate(request.model, request.target_language, batch) for batch in batches]
+    start_time = time.time()
+
+    tasks = [llm_client.batch_translate(request.model, request.target_language, batch) for batch in batches]
 
     results = await asyncio.gather(*tasks)
+
+    print(f"Total translation time: {time.time() - start_time:.2f} seconds")
     
     if not results or all(result is None for result in results):
         return {"translatedText": None}
