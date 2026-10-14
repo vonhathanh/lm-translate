@@ -1,3 +1,7 @@
+Add following env variables:
+- GEMINI_API_KEY, DEEP_SEEK_API_KEY, LOCAL_LLM_API_KEY, LOCAL_LLM_API_URL
+
+
 Run server: 
 ```cd server && uvicorn main:app --port 5000 --reload```
 
