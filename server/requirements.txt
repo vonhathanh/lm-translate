@@ -4,3 +4,7 @@
  openai >= 2.37.0
  dotenv>=0.9.9
  uvicorn>=0.54.0
+ python-multipart>=0.0.32
+ sqlmodel>=0.0.48
+ asyncpg>=0.32.0
+ greenlet==3.5.6
