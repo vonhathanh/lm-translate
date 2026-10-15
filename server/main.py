@@ -1,30 +1,39 @@
+from dotenv import load_dotenv
+load_dotenv() 
+
 import asyncio
+from contextlib import asynccontextmanager
 import re
 import time
+from typing import Annotated
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from bs4 import BeautifulSoup, NavigableString
 
-from dotenv import load_dotenv
+from requests import Session
 
 from dto import HtmlPageTranslationRequest
+from model import create_db_and_tables, get_session
 from translation_service import LLMClient
 
-load_dotenv() 
 
 
 MAX_TOKENS_PER_BATCH = 500
 
+SessionDep = Annotated[Session, Depends(get_session)]
 
-app = FastAPI()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await create_db_and_tables()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+
 llm_client = LLMClient()
 
-
-# Define the origins that are allowed to make requests
-origins = [
-    "http://localhost:5000",  # Common for React
-]
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,6 +42,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 def create_batches(input_texts: set[str]) -> list[list[str]]:
     batches = []
