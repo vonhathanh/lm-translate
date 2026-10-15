@@ -8,18 +8,8 @@ from google.genai import types
 from openai import OpenAI
 
 from dto import TranslationOutput
+from prompts import TRANSLATE_HTML_PROMPT, TRANSLATE_BOOK_PROMPT
 
-
-TRANSLATION_PROMPT = """Translate the following array of text to {}.
-If the text already is in the target language, keep it as is. 
-If the text is not translatable (e.g. a name, a brand, a product name, special characters), keep it as is.
-Preserve the special characters order, for example, if the input text is: "#$% true", target language is Vietnamese, the output should be "#$% đúng", not "đúng".
-Return an array of translated text preserving input order. 
-EXAMPLE JSON OUTPUT:
-{{
-    "items": ["translated text 1", "translated text 2", "..."]
-}}
-Here is the input array: {}"""
 
 GOOGLE_LLM_OPTIONS = {
     "gemini-3.5-flash",
@@ -30,6 +20,18 @@ GOOGLE_LLM_OPTIONS = {
 DEEPSEEK_LLM_OPTIONS = {
     "deepseek-v4-flash",
     "deepseek-v4-pro",
+}
+
+OPENAI_LLM_OPTIONS = {
+    "gpt-6-astra",  # the best
+    "gpt-6.1-sol",  # acceptable
+    "gpt-6-luna"  # the cheapest and the worst
+}
+
+# not supported yet, too lazy, sorry bro
+MUSE_SPARK_LLM_OPTIONS = {
+    "muse-spark-1.3-contributor", # too fucking cheap to be true
+    "muse-spark-1.3" # same as above expect won't use our code to train AI
 }
 
 class LLMClient:
@@ -44,6 +46,7 @@ class LLMClient:
             api_key=os.getenv("LOCAL_LLM_API_KEY"),
             base_url=os.getenv("LOCAL_LLM_API_URL")
         )
+        self.openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     def inference(self, model, prompt):
         if model in GOOGLE_LLM_OPTIONS:
@@ -74,6 +77,15 @@ class LLMClient:
             )
             print(f"Local LLM response: {response.choices[0].message.content}")
             return loads(response.choices[0].message.content)["items"]
+        elif model in OPENAI_LLM_OPTIONS:
+            response = self.openai_client.chat.completions.create(
+                model="current",
+                messages=[{"role": "user", "content": prompt}],
+                reasoning_effort="none",
+                response_format={"type": "text"},
+            )
+            print(f"{model} response: {response.choices[0].message.content}")
+            return response.choices[0].message.content
         else:
             raise ValueError(f"Unsupported model: {model}")
 
@@ -99,8 +111,14 @@ class LLMClient:
         return None
 
     async def batch_translate(self, model: str, target_language: str, batch: list[str]):
-        prompt = TRANSLATION_PROMPT.format(target_language, batch)
+        prompt = TRANSLATE_HTML_PROMPT.format(target_language, batch)
         response = await self.call_llm(model, prompt, retry=0, auto_switch_model=False)
+        print(f"Translation response for model {model}: {response}")
+        return response
+
+    async def translate_single_chapter(self, model, source_lang: str = 'vi', target_lang: str = 'cn'):
+        prompt = TRANSLATE_BOOK_PROMPT.format(source_lang, target_lang)
+        response = await self.call_llm(model, prompt, retry=1, auto_switch_model=False)
         print(f"Translation response for model {model}: {response}")
         return response
 
