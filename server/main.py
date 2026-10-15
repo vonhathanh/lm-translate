@@ -117,7 +117,7 @@ def map_translated_text_to_html(soup: BeautifulSoup, input_batches: list[list[st
 
 @app.get("/")
 def read_root():
-    return {"Hello": "World"}
+    return "Hello World"
 
 
 @app.post("/api/v1/translate-html")
@@ -148,3 +148,9 @@ async def translate_html_page(request: HtmlPageTranslationRequest):
     new_html = map_translated_text_to_html(soup, batches, results)
 
     return {"translatedText": new_html}
+
+
+@app.post("/api/v1/translate-text-from-file")
+async def translate_html_page(file: UploadFile):
+    print(f"{file.filename=}")
+    return {"message": "OK", "status": 200}
