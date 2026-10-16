@@ -8,3 +8,4 @@
  sqlmodel>=0.0.48
  asyncpg>=0.32.0
  greenlet==3.5.6
+ bullmq==3.4.0

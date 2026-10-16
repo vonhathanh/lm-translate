@@ -2,38 +2,53 @@ from dotenv import load_dotenv
 load_dotenv() 
 
 import asyncio
-from contextlib import asynccontextmanager
 import re
 import time
-from typing import Annotated
 
-from fastapi import Depends, FastAPI, UploadFile
+from typing import Annotated
+from contextlib import asynccontextmanager
+from requests import Session
+
+from fastapi import Depends, FastAPI, HTTPException, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from bs4 import BeautifulSoup, NavigableString
-
-from requests import Session
+from bullmq import Queue, Worker
 
 from dto import HtmlPageTranslationRequest
 from model import create_db_and_tables, get_session
 from translation_service import LLMClient
 
 
-
 MAX_TOKENS_PER_BATCH = 500
 
 SessionDep = Annotated[Session, Depends(get_session)]
+
+async def process(job, job_token):
+    print(
+        f"Job id: {job.id}\n"
+        f"Name: {job.name}\n"
+        f"Data: {job.data}\n"
+        f"Options: {job.opts}"
+    )
+    # job.data will include the data added to the queue
+    return
+
+QUEUE_NAME = 'fanqie-translation-queue'
+queue = Queue(QUEUE_NAME, {"connection": "redis://localhost:6379"})
+worker = Worker(QUEUE_NAME, process, {"connection": "redis://localhost:6379"})
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await create_db_and_tables()
     yield
+    await queue.close()
+    await worker.close()
 
 
 app = FastAPI(lifespan=lifespan)
 
 llm_client = LLMClient()
-
 
 app.add_middleware(
     CORSMiddleware,
@@ -162,5 +177,31 @@ async def translate_html_page(request: HtmlPageTranslationRequest):
 
 @app.post("/api/v1/translate-text-from-file")
 async def translate_html_page(file: UploadFile):
-    print(f"{file.filename=}")
-    return {"message": "OK", "status": 200}
+    # ensure it's a text file
+    if not file.filename.endswith('.txt'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Only .txt files are allowed."
+        )
+    filename = file.filename.split('.txt')[0]
+
+    content = await file.read()
+
+    try:
+        text_content = content.decode("utf-8")
+        chapters = re.split(r"第\d+章", text_content)
+        print('chapter 0: ', chapters[0])
+        print('-'*40)
+        print('chapter 1: ', chapters[1])
+        print('-'*40)
+        print('last chapter: ', chapters[-1])
+        await queue.add("translate", {"id": 1})
+        return {"message": f"translating {len(chapters)} chapters, please wait"}
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not decode file. Please ensure it is UTF-8 encoded."
+        )
+    # split txt into chapters & translate
+    # save to db after translation
+    # return number of chapters that are going to be translated
