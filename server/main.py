@@ -11,10 +11,7 @@ from typing import Annotated
 
 from bs4 import BeautifulSoup, NavigableString
 from bullmq import Queue, Worker
-from dto import HtmlPageTranslationRequest
-from fastapi import Depends, FastAPI, HTTPException, UploadFile, status
-from fastapi.middleware.cors import CORSMiddleware
-from model import (
+from database import (
     Book,
     Chapter,
     add_book,
@@ -23,6 +20,9 @@ from model import (
     find_book,
     get_session,
 )
+from dto import HtmlPageTranslationRequest
+from fastapi import Depends, FastAPI, HTTPException, UploadFile, status
+from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel.ext.asyncio.session import AsyncSession
 from translation_service import LLMClient
 
