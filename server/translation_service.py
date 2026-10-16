@@ -3,13 +3,13 @@ import os
 import random
 import re
 
+from pydantic import BaseModel
+
+from dto import TranslationOutput
 from google import genai
 from google.genai import types
 from openai import OpenAI
-
-from dto import TranslationOutput
-from prompts import TRANSLATE_HTML_PROMPT, TRANSLATE_BOOK_PROMPT
-
+from prompts import TRANSLATE_BOOK_PROMPT, TRANSLATE_HTML_PROMPT
 
 GOOGLE_LLM_OPTIONS = {
     "gemini-3.5-flash",
@@ -25,33 +25,39 @@ DEEPSEEK_LLM_OPTIONS = {
 OPENAI_LLM_OPTIONS = {
     "gpt-6-astra",  # the best
     "gpt-6.1-sol",  # acceptable
-    "gpt-6-luna"  # the cheapest and the worst
+    "gpt-6-luna",  # the cheapest and the worst
 }
 
 # not supported yet, too lazy, sorry bro
 MUSE_SPARK_LLM_OPTIONS = {
-    "muse-spark-1.3-contributor", # too fucking cheap to be true
-    "muse-spark-1.3" # same as above expect won't use our code to train AI
+    "muse-spark-1.3-contributor",  # too fucking cheap to be true
+    "muse-spark-1.3",  # same as above expect won't use our code to train AI
 }
 
-class LLMClient:
 
+class ChapterTranslationResult(BaseModel):
+    title: str
+    content: str
+
+
+class LLMClient:
     def __init__(self):
         self.gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
         self.deepseek_client = OpenAI(
-            api_key=os.environ.get('DEEP_SEEK_API_KEY'),
-            base_url="https://api.deepseek.com"
+            api_key=os.environ.get("DEEP_SEEK_API_KEY"),
+            base_url="https://api.deepseek.com",
         )
         self.local_llm_client = OpenAI(
             api_key=os.getenv("LOCAL_LLM_API_KEY"),
-            base_url=os.getenv("LOCAL_LLM_API_URL")
+            base_url=os.getenv("LOCAL_LLM_API_URL"),
         )
         self.openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
     def inference(self, model, prompt):
+        print(f"inference model {model}")
         if model in GOOGLE_LLM_OPTIONS:
             response = self.gemini_client.models.generate_content(
-                model=model, 
+                model=model,
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json",
@@ -78,20 +84,20 @@ class LLMClient:
             print(f"Local LLM response: {response.choices[0].message.content}")
             return loads(response.choices[0].message.content)["items"]
         elif model in OPENAI_LLM_OPTIONS:
-            response = self.openai_client.chat.completions.create(
-                model="current",
+            response = self.openai_client.chat.completions.parse(
+                model=model,
                 messages=[{"role": "user", "content": prompt}],
-                reasoning_effort="none",
-                response_format={"type": "text"},
+                reasoning_effort="low",
+                response_format=ChapterTranslationResult,
             )
-            print(f"{model} response: {response.choices[0].message.content}")
-            return response.choices[0].message.content
+            print(f"{model} response: {response.choices[0].message.parsed}")
+            return response.choices[0].message.parsed
         else:
             raise ValueError(f"Unsupported model: {model}")
 
     def switch_model(self, current_model):
         models = GOOGLE_LLM_OPTIONS.union(DEEPSEEK_LLM_OPTIONS)
-        model =  random.choice(list(models - {current_model}))
+        model = random.choice(list(models - {current_model}))
         return model
 
     async def call_llm(self, model, prompt, retry=0, auto_switch_model=False):
@@ -107,6 +113,7 @@ class LLMClient:
             try:
                 return self.inference(new_model, prompt)
             except Exception as e:
+                print(f"LLM inference error for model {model}: {e}")
                 return None
         return None
 
@@ -116,10 +123,14 @@ class LLMClient:
         print(f"Translation response for model {model}: {response}")
         return response
 
-    async def translate_single_chapter(self, model, source_lang: str = 'vi', target_lang: str = 'cn'):
-        prompt = TRANSLATE_BOOK_PROMPT.format(source_lang, target_lang)
+    async def translate_single_chapter(
+        self,
+        chapter_text: str,
+        model: str = "gpt-6-luna",
+    ):
+        print(f"{model=}")
+        prompt = TRANSLATE_BOOK_PROMPT.format(chapter_text=chapter_text)
         response = await self.call_llm(model, prompt, retry=1, auto_switch_model=False)
-        print(f"Translation response for model {model}: {response}")
         return response
 
 
@@ -138,8 +149,7 @@ def loads(s: str):
     # 1) Try triple backtick code blocks (with or without 'json' after the backticks).
     #    We use finditer to allow multiple code blocks in the string.
     triple_code_block_regex = re.compile(
-        r"```(?:json)?\s*(.*?)```",
-        re.DOTALL | re.IGNORECASE
+        r"```(?:json)?\s*(.*?)```", re.DOTALL | re.IGNORECASE
     )
     for match in triple_code_block_regex.finditer(s):
         snippet = match.group(1).strip()

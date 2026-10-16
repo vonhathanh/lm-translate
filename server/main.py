@@ -1,39 +1,74 @@
 from dotenv import load_dotenv
-load_dotenv() 
+
+load_dotenv()
 
 import asyncio
+import logging
 import re
 import time
-
-from typing import Annotated
 from contextlib import asynccontextmanager
-from requests import Session
+from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, UploadFile, status
-from fastapi.middleware.cors import CORSMiddleware
 from bs4 import BeautifulSoup, NavigableString
 from bullmq import Queue, Worker
-
 from dto import HtmlPageTranslationRequest
-from model import create_db_and_tables, get_session
+from fastapi import Depends, FastAPI, HTTPException, UploadFile, status
+from fastapi.middleware.cors import CORSMiddleware
+from model import (
+    Book,
+    Chapter,
+    add_book,
+    add_chapter,
+    create_db_and_tables,
+    find_book,
+    get_session,
+)
+from sqlmodel.ext.asyncio.session import AsyncSession
 from translation_service import LLMClient
-
 
 MAX_TOKENS_PER_BATCH = 500
 
-SessionDep = Annotated[Session, Depends(get_session)]
+SessionDep = Annotated[AsyncSession, Depends(get_session)]
+
+logging.basicConfig(
+    level=logging.INFO,  # Set minimum log level to capture
+    format="%(asctime)s - %(levelname)s - %(message)s",  # Customize output format
+    # filename='app.log',                           # Save logs to a file (omitting this prints to console)
+    filemode="w",  # 'w' overwrites file; 'a' appends (default)
+)
+
+logger = logging.getLogger(__name__)
+
 
 async def process(job, job_token):
-    print(
-        f"Job id: {job.id}\n"
-        f"Name: {job.name}\n"
-        f"Data: {job.data}\n"
-        f"Options: {job.opts}"
-    )
-    # job.data will include the data added to the queue
-    return
+    logger.info(f"Job id: {job.id}, Name: {job.name}")
+    try:
+        if job.name == "translate":
+            title = job.data["title"]
+            chapter_index = job.data["chapter_index"]
+            book = await find_book(title)
+            if book is None:
+                book = await add_book(Book(title=title))
+                logger.info(f"added new book, data: {book}")
+            translated_result = await llm_client.translate_single_chapter(
+                job.data["content"], "gpt-6.1-sol"
+            )
+            if translated_result:
+                chapter = await add_chapter(
+                    Chapter(
+                        title=translated_result.title,
+                        content=translated_result.content,
+                        index=chapter_index,
+                    )
+                )
+                logger.info(f"added new chapter, data: {chapter}")
+        else:
+            raise ValueError("invalid job name")
+    except Exception as e:
+        logger.info(f"{e=}")
 
-QUEUE_NAME = 'fanqie-translation-queue'
+
+QUEUE_NAME = "fanqie-translation-queue"
 queue = Queue(QUEUE_NAME, {"connection": "redis://localhost:6379"})
 worker = Worker(QUEUE_NAME, process, {"connection": "redis://localhost:6379"})
 
@@ -102,7 +137,7 @@ def parse_text_from_html(html: str) -> tuple[BeautifulSoup, set[str]]:
         Chinese → "你好"
         Japanese → "こんにちは"
     """
-    PATTERN = r'^[\d\W_]+$'
+    PATTERN = r"^[\d\W_]+$"
 
     soup = BeautifulSoup(html, "html.parser")
     input_texts = set()
@@ -112,14 +147,20 @@ def parse_text_from_html(html: str) -> tuple[BeautifulSoup, set[str]]:
         direct_texts = [
             t.strip().lower()
             for t in element.contents
-            if isinstance(t, NavigableString) and t.strip() and not bool(re.match(PATTERN, t.strip()))
+            if isinstance(t, NavigableString)
+            and t.strip()
+            and not bool(re.match(PATTERN, t.strip()))
         ]
         if direct_texts:
             input_texts.update(direct_texts)
     return soup, input_texts
 
 
-def map_translated_text_to_html(soup: BeautifulSoup, input_batches: list[list[str]], translate_results: list[list[str]]) -> str:
+def map_translated_text_to_html(
+    soup: BeautifulSoup,
+    input_batches: list[list[str]],
+    translate_results: list[list[str]],
+) -> str:
     translated_text = {}
     for i in range(len(translate_results)):
         for j in range(len(input_batches[i])):
@@ -133,10 +174,8 @@ def map_translated_text_to_html(soup: BeautifulSoup, input_batches: list[list[st
 
         translated = translated_text[normalized_text]
         # Replace text node
-        text_node.replace_with(
-            text_node.replace(text_node.text, translated)
-        )
-    
+        text_node.replace_with(text_node.replace(text_node.text, translated))
+
     return str(soup)
 
 
@@ -147,7 +186,12 @@ def read_root():
 
 @app.post("/api/v1/translate-html")
 async def translate_html_page(request: HtmlPageTranslationRequest):
-    print("Received translation request for model:", request.model, "and target language:", request.target_language)
+    print(
+        "Received translation request for model:",
+        request.model,
+        "and target language:",
+        request.target_language,
+    )
     # TODO: benchmark html parsers: lxlm, selectolax
     # parse html and extract text
     # normalize (trim, lowercase) then dedup the text to be translated
@@ -161,12 +205,15 @@ async def translate_html_page(request: HtmlPageTranslationRequest):
 
     start_time = time.time()
 
-    tasks = [llm_client.batch_translate(request.model, request.target_language, batch) for batch in batches]
+    tasks = [
+        llm_client.batch_translate(request.model, request.target_language, batch)
+        for batch in batches
+    ]
 
     results = await asyncio.gather(*tasks)
 
     print(f"Total translation time: {time.time() - start_time:.2f} seconds")
-    
+
     if not results or all(result is None for result in results):
         return {"translatedText": None}
 
@@ -176,32 +223,35 @@ async def translate_html_page(request: HtmlPageTranslationRequest):
 
 
 @app.post("/api/v1/translate-text-from-file")
-async def translate_html_page(file: UploadFile):
+async def translate_text_from_file(file: UploadFile):
     # ensure it's a text file
-    if not file.filename.endswith('.txt'):
+    if not file.filename.endswith(".txt"):
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
-            detail="Only .txt files are allowed."
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only .txt files are allowed.",
         )
-    filename = file.filename.split('.txt')[0]
+    filename = file.filename.split(".txt")[0]
 
     content = await file.read()
 
     try:
         text_content = content.decode("utf-8")
         chapters = re.split(r"第\d+章", text_content)
-        print('chapter 0: ', chapters[0])
-        print('-'*40)
-        print('chapter 1: ', chapters[1])
-        print('-'*40)
-        print('last chapter: ', chapters[-1])
-        await queue.add("translate", {"id": 1})
+        for i in range(1, 2):
+            await queue.add(
+                "translate",
+                {"title": filename, "chapter_index": i, "content": chapters[i]},
+                {
+                    "attempts": 3,  # Total attempts, including the first try
+                    "backoff": {
+                        "type": "exponential",
+                        "delay": 1000,  # 1s, then 2s, then ...
+                    },
+                },
+            )
         return {"message": f"translating {len(chapters)} chapters, please wait"}
     except UnicodeDecodeError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Could not decode file. Please ensure it is UTF-8 encoded."
+            detail="Could not decode file. Please ensure it is UTF-8 encoded.",
         )
-    # split txt into chapters & translate
-    # save to db after translation
-    # return number of chapters that are going to be translated
