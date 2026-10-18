@@ -7,3 +7,5 @@ __pycache__/*
 .vscode/
 
 *.env
+
+alembic.ini

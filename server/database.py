@@ -25,9 +25,10 @@ class Book(SQLModel, table=True):
 
 class Chapter(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    index: int = Field(unique=True)
+    index: int
     title: str
     content: str
+    raw: str | None
     book_id: int | None = Field(default=None, foreign_key="book.id")
     book: Book | None = Relationship(back_populates="chapters")
 
