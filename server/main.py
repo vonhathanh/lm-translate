@@ -18,6 +18,7 @@ from database import (
     add_chapter,
     create_db_and_tables,
     find_book,
+    find_chapter,
     get_session,
 )
 from dto import HtmlPageTranslationRequest
@@ -46,12 +47,19 @@ async def process(job, job_token):
         if job.name == "translate":
             title = job.data["title"]
             chapter_index = job.data["chapter_index"]
+
             book = await find_book(title)
             if book is None:
                 book = await add_book(Book(title=title))
-                logger.info(f"added new book, data: {book}")
+                logger.info(f"added new book, id: {book.id}")
+
+            chapter = await find_chapter(book.id, chapter_index)
+            if chapter:
+                logger.info(f"chapter for book: {title}, index: {chapter_index} already existed at chapter_id = {chapter.id}, skipping this job!")
+                return
+            
             translated_result = await llm_client.translate_single_chapter(
-                job.data["content"], "gpt-6.1-sol"
+                job.data["content"], "deepseek-flash"
             )
             if translated_result:
                 chapter = await add_chapter(
@@ -59,9 +67,11 @@ async def process(job, job_token):
                         title=translated_result.title,
                         content=translated_result.content,
                         index=chapter_index,
+                        raw=job.data["content"],
+                        book_id=book.id
                     )
                 )
-                logger.info(f"added new chapter, data: {chapter}")
+                logger.info(f"added new chapter, index: {chapter.index}, title: {chapter.title}")
         else:
             raise ValueError("invalid job name")
     except Exception as e:

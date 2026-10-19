@@ -5,7 +5,7 @@ import re
 
 from google import genai
 from google.genai import Client, types
-from openai import OpenAI
+from openai import AsyncOpenAI
 from prompts import TRANSLATE_BOOK_PROMPT, TRANSLATE_HTML_PROMPT
 from pydantic import BaseModel
 
@@ -16,7 +16,7 @@ GOOGLE_LLM_OPTIONS = {
 }
 
 DEEPSEEK_LLM_OPTIONS = {
-    "deepseek-v4-flash",
+    "deepseek-flash",
     "deepseek-v4-pro",
 }
 
@@ -41,14 +41,14 @@ class ChapterTranslationResult(BaseModel):
 class LLMClient:
     def __init__(self):
         self.gemini_client: Client = None
-        self.deepseek_client: OpenAI = None
-        self.local_llm_client: OpenAI = None
-        self.openai_client: OpenAI = None
+        self.deepseek_client: AsyncOpenAI = None
+        self.local_llm_client: AsyncOpenAI = None
+        self.openai_client: AsyncOpenAI = None
 
-    def call_google_llm(self, model: str, prompt: str, output_schema: type[BaseModel] | None = None):
+    async def call_google_llm(self, model: str, prompt: str, output_schema: type[BaseModel] | None = None):
         if self.gemini_client is None:
             self.gemini_client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-        response = self.gemini_client.models.generate_content(
+        response = await self.gemini_client.aio.models.generate_content(
                         model=model,
                         contents=prompt,
                         config=types.GenerateContentConfig(
@@ -58,26 +58,29 @@ class LLMClient:
                     )
         return response.parsed
 
-    def call_deepseek_llm(self, model: str, prompt: str):
+    async def call_deepseek_llm(self, model: str, prompt: str, output_schema: type[BaseModel] | None = None):
         if self.deepseek_client is None:
-            self.deepseek_client = OpenAI(
+            self.deepseek_client = AsyncOpenAI(
                         api_key=os.environ.get("DEEP_SEEK_API_KEY"),
                         base_url="https://api.deepseek.com",
                     )
-        response = self.deepseek_client.chat.completions.create(
+        response = await self.deepseek_client.chat.completions.create(
                         model=model,
                         messages=[{"role": "user", "content": prompt}],
                         response_format={"type": "json_object"},
                     )
-        return loads(response.choices[0].message.content)
+        result = loads(response.choices[0].message.content)
+        if output_schema:
+            return output_schema.model_validate(result)
+        return result
 
-    def call_local_llm(self, prompt: str):
+    async def call_local_llm(self, prompt: str):
         if self.local_llm_client is None:
-            self.local_llm_client = OpenAI(
+            self.local_llm_client = AsyncOpenAI(
                         api_key=os.getenv("LOCAL_LLM_API_KEY"),
                         base_url=os.getenv("LOCAL_LLM_API_URL"),
                     )
-        response = self.local_llm_client.chat.completions.create(
+        response = await self.local_llm_client.chat.completions.create(
                         model="current",
                         messages=[{"role": "user", "content": prompt}],
                         reasoning_effort="none",
@@ -85,10 +88,10 @@ class LLMClient:
                     )
         return loads(response.choices[0].message.content)
 
-    def call_openai_llm(self, model: str, prompt: str, output_schema: type[BaseModel] | None = None):
+    async def call_openai_llm(self, model: str, prompt: str, output_schema: type[BaseModel] | None = None):
         if self.openai_client is None:
-            self.openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        response = self.openai_client.chat.completions.parse(
+            self.openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+        response = await self.openai_client.chat.completions.parse(
                         model=model,
                         messages=[{"role": "user", "content": prompt}],
                         reasoning_effort="low",
@@ -97,15 +100,15 @@ class LLMClient:
         return response.choices[0].message.parsed
 
 
-    def inference(self, model: str, prompt: str, output_schema: type[BaseModel] | None = None):
+    async def inference(self, model: str, prompt: str, output_schema: type[BaseModel] | None = None):
         if model in GOOGLE_LLM_OPTIONS:
-            return self.call_google_llm(model, prompt, output_schema)
+            return await self.call_google_llm(model, prompt, output_schema)
         elif model in DEEPSEEK_LLM_OPTIONS:
-            return self.call_deepseek_llm(model, prompt)
+            return await self.call_deepseek_llm(model, prompt, output_schema)
         elif model == "localhost":
-            return self.call_local_llm(prompt)
+            return await self.call_local_llm(prompt)
         elif model in OPENAI_LLM_OPTIONS:
-            return self.call_openai_llm(model, prompt, output_schema)
+            return await self.call_openai_llm(model, prompt, output_schema)
         else:
             raise ValueError(f"Unsupported model: {model}")
 
@@ -117,7 +120,7 @@ class LLMClient:
     async def call_llm(self, model, prompt, retry=0, auto_switch_model=False, output_schema: type[BaseModel] | None = None):
         while retry >= 0:
             try:
-                return self.inference(model, prompt, output_schema)
+                return await self.inference(model, prompt, output_schema)
             except Exception as e:
                 print(f"LLM inference error for model {model}: {e}")
                 retry -= 1
@@ -125,7 +128,7 @@ class LLMClient:
             new_model = self.switch_model(model)
             print(f"Switching to alternative model: {new_model}")
             try:
-                return self.inference(new_model, prompt)
+                return await self.inference(new_model, prompt)
             except Exception as e:
                 print(f"LLM inference error for model {model}: {e}")
                 return None

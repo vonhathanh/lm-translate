@@ -29,7 +29,7 @@ class Chapter(SQLModel, table=True):
     title: str
     content: str
     raw: str | None
-    book_id: int | None = Field(default=None, foreign_key="book.id")
+    book_id: int = Field(nullable=False, foreign_key="book.id")
     book: Book | None = Relationship(back_populates="chapters")
 
 
@@ -76,7 +76,14 @@ async def add_book(book: Book):
 
 
 async def find_book(title: str):
-    async with (SessionLocal() as session):
+    async with SessionLocal() as session:
         statement = select(Book).where(Book.title == title)
         book = (await session.exec(statement)).first()
         return book
+
+
+async def find_chapter(book_id: int, index: int):
+    async with SessionLocal() as session:
+        statement = select(Chapter).where(Chapter.book_id == book_id, Chapter.index == index)
+        chapter = (await session.exec(statement)).first()
+        return chapter
