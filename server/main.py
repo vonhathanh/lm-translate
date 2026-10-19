@@ -1,3 +1,5 @@
+import os
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -59,7 +61,7 @@ async def process(job, job_token):
                 return
             
             translated_result = await llm_client.translate_single_chapter(
-                job.data["content"], "deepseek-flash"
+                job.data["content"], os.getenv("LLM_MODEL", "deepseek-flash")
             )
             if translated_result:
                 chapter = await add_chapter(
@@ -247,12 +249,12 @@ async def translate_text_from_file(file: UploadFile):
     try:
         text_content = content.decode("utf-8")
         chapters = re.split(r"第\d+章", text_content)
-        for i in range(1, 2):
+        for i in range(1, 3):
             await queue.add(
                 "translate",
                 {"title": filename, "chapter_index": i, "content": chapters[i]},
                 {
-                    "attempts": 3,  # Total attempts, including the first try
+                    "attempts": 1,  # Total attempts, including the first try
                     "backoff": {
                         "type": "exponential",
                         "delay": 1000,  # 1s, then 2s, then ...
