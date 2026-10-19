@@ -19,6 +19,7 @@ from database import (
     add_book,
     add_chapter,
     create_db_and_tables,
+    find_all_books,
     find_book,
     find_chapter,
     get_session,
@@ -71,7 +72,8 @@ async def process(job, job_token):
                         index=chapter_index,
                         raw=job.data["content"],
                         book_id=book.id
-                    )
+                    ),
+                    book.chapter_count
                 )
                 logger.info(f"added new chapter, index: {chapter.index}, title: {chapter.title}")
         else:
@@ -194,6 +196,10 @@ def map_translated_text_to_html(
 @app.get("/")
 def read_root():
     return "Hello World"
+
+@app.get("/api/v1/books")
+async def get_all_books(page: int = 0, limit: int = 10) -> list[Book]:
+    return await find_all_books(page, limit)
 
 
 @app.post("/api/v1/translate-html")
