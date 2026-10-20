@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from "macros.html" import cover, pager %}
+{% block title %}{{ book.title }} – {{ super() }}{% endblock %}
+
+{% block content %}
+<article class="wrap detail">
+  <a class="back" href="{{ url_for('get_all_books') }}">‹ Thư viện</a>
+
+  <div class="detail-head">
+    <div class="detail-cover">{{ cover(book, large=true) }}</div>
+    <div class="detail-info">
+      <h1>{{ book.title }}</h1>
+      <p class="muted">{{ book.author }} – {{ book.chapter_count }} chương</p>
+      {% if first_chapter %}
+      <a class="btn btn-primary" href="{{ url_for('get_chapter_detail', chapter_id=first_chapter.id) }}">Đọc từ đầu</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <section class="intro" aria-labelledby="intro-h">
+    <h2 id="intro-h">Giới thiệu</h2>
+    <input type="checkbox" id="intro-toggle" class="sr-only">
+    <div class="intro-text">{{ book.description }}</div>
+    <label for="intro-toggle" class="link-btn" role="button"></label>
+  </section>
+
+  <section id="chapters" aria-labelledby="chapters-h">
+    <h2 id="chapters-h">Danh sách chương</h2>
+    {% if chapters %}
+    <ul class="chapters">
+      {% for c in chapters %}
+      <li><a href="{{ url_for('get_chapter_detail', chapter_id=c.id) }}">{{ c.title }}</a></li>
+      {% endfor %}
+    </ul>
+    {{ pager(page, pages, 'get_book_detail', book_id=book.id, _anchor='chapters') }}
+    {% else %}
+    <p class="empty">Truyện này chưa có chương nào.</p>
+    {% endif %}
+  </section>
+</article>
+{% endblock %}

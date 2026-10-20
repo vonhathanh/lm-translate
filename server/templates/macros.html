@@ -1,0 +1,29 @@
+{# Book cover. Falls back to a flat colour block with the title when cover_image is empty. #}
+{% macro cover(book, large=false) %}
+<div class="cover{% if large %} cover-lg{% endif %}" style="--h: {{ (book.id|int * 47) % 360 }}">
+  {% if book.cover_image %}
+    <img src="{{ book.cover_image }}" alt="{{ ('Bìa truyện ' ~ book.title) if large else '' }}" loading="lazy">
+  {% else %}
+    <span>{{ book.title }}</span>
+  {% endif %}
+</div>
+{% endmacro %}
+
+{# Prev / next pager. Extra keyword args are passed to url_for (e.g. book_id=1, _anchor='chapters'). #}
+{% macro pager(page, pages, endpoint) %}
+{% if pages > 1 %}
+<nav class="pager" aria-label="Phân trang">
+  {% if page > 1 %}
+    <a class="btn btn-quiet" rel="prev" href="{{ url_for(endpoint, page=page-1, **kwargs) }}">Trang trước</a>
+  {% else %}
+    <span class="btn btn-quiet is-disabled" aria-disabled="true">Trang trước</span>
+  {% endif %}
+  <span class="pager-status">Trang {{ page }} / {{ pages }}</span>
+  {% if page < pages %}
+    <a class="btn btn-quiet" rel="next" href="{{ url_for(endpoint, page=page+1, **kwargs) }}">Trang sau</a>
+  {% else %}
+    <span class="btn btn-quiet is-disabled" aria-disabled="true">Trang sau</span>
+  {% endif %}
+</nav>
+{% endif %}
+{% endmacro %}

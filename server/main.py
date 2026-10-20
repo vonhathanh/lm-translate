@@ -1,6 +1,9 @@
 import os
 
 from dotenv import load_dotenv
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 
 load_dotenv()
 
@@ -21,11 +24,13 @@ from database import (
     create_db_and_tables,
     find_all_books,
     find_book,
+    find_book_detail_by_id,
     find_chapter,
+    find_chapter_detail_by_id,
     get_session,
 )
 from dto import HtmlPageTranslationRequest
-from fastapi import Depends, FastAPI, HTTPException, UploadFile, status
+from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel.ext.asyncio.session import AsyncSession
 from translation_service import LLMClient
@@ -96,9 +101,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
-
-llm_client = LLMClient()
-
+app.mount("/static", StaticFiles(directory="./static"), name="static")
+templates = Jinja2Templates(directory="./templates")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  # Allow all origins for development; restrict in production
@@ -106,6 +110,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+llm_client = LLMClient()
 
 
 def create_batches(input_texts: set[str]) -> list[list[str]]:
@@ -197,9 +203,27 @@ def map_translated_text_to_html(
 def read_root():
     return "Hello World"
 
-@app.get("/api/v1/books")
-async def get_all_books(page: int = 0, limit: int = 10) -> list[Book]:
-    return await find_all_books(page, limit)
+@app.get("/api/v1/books", response_class=HTMLResponse)
+async def get_all_books(request: Request, page: int = 0, limit: int = 10) -> list[Book]:
+    data = await find_all_books(page, limit)
+    return templates.TemplateResponse(
+        request=request, name="books.html", context={"books": data["books"], "total": data["total"], "pages": data["total"] // limit}
+    )
+
+@app.get("/api/v1/book/{book_id}", response_class=HTMLResponse)
+async def get_book_detail(request: Request, book_id: int):
+    context = await find_book_detail_by_id(book_id)
+    return templates.TemplateResponse(
+        request=request, name="book_detail.html", context=context
+    )
+
+@app.get("/api/v1/chapter/{chapter_id}", response_class=HTMLResponse)
+async def get_chapter_detail(request: Request, chapter_id: int):
+    context = await find_chapter_detail_by_id(chapter_id)
+    return templates.TemplateResponse(
+        request=request, name="chapter.html", context=context
+    )
+
 
 
 @app.post("/api/v1/translate-html")

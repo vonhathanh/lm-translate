@@ -12,7 +12,9 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 class Base(SQLModel, table=False):
     id: int | None = Field(default=None, primary_key=True)
     created_at: datetime = Field(default_factory=func.now)
-    updated_at: datetime = Field(default_factory=func.now, sa_column_kwargs={"onupdate": func.now()})
+    updated_at: datetime = Field(
+        default_factory=func.now, sa_column_kwargs={"onupdate": func.now()}
+    )
 
 
 class Book(Base, table=True):
@@ -71,7 +73,9 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 async def add_chapter(chapter: Chapter, chapter_count: int):
     async with SessionLocal() as session, session.begin():
         session.add(chapter)
-        statement = update(Book).where(Book.id == chapter.book_id).values(chapter_count=chapter_count + 1)
+        statement = (
+            update(Book).where(Book.id == chapter.book_id).values(chapter_count=chapter_count + 1)
+        )
         await session.exec(statement)
         await session.flush()
         return chapter
@@ -89,12 +93,56 @@ async def find_book(title: str):
         statement = select(Book).where(Book.title == title)
         return (await session.exec(statement)).first()
 
+
+async def find_book_detail_by_id(book_id: int):
+    async with SessionLocal() as session:
+        statement = (
+            select(Book, Chapter.id, Chapter.index, Chapter.title, Chapter.updated_at)
+            .join(Book.chapters)
+            .where(Book.id == book_id)
+        )
+        rows = (await session.exec(statement)).all()
+        if not rows:
+            return None
+        result = {"book": None, "chapters": []}
+        for row in rows:
+            book, chapter_id, chapter_index, chapter_title, updated_at = row
+            if not result["book"]:
+                result["book"] = book
+            result["chapters"].append(
+                {
+                    "id": chapter_id,
+                    "index": chapter_index,
+                    "title": chapter_title,
+                    "updated_at": updated_at,
+                }
+            )
+        return result
+
+
 async def find_all_books(page: int, limit: int):
     async with SessionLocal() as session:
+        count_statement = select(func.count()).select_from(Book)
+        total = (await session.exec(count_statement)).one()
         statement = select(Book).order_by(Book.id).offset(page * limit).limit(limit)
-        return (await session.exec(statement)).fetchmany()
+        books = (await session.exec(statement)).fetchmany()
+        return {"total": total, "books": books}
+
 
 async def find_chapter(book_id: int, index: int):
     async with SessionLocal() as session:
         statement = select(Chapter).where(Chapter.book_id == book_id, Chapter.index == index)
         return (await session.exec(statement)).first()
+
+
+async def find_chapter_detail_by_id(chapter_id: int):
+    async with SessionLocal() as session:
+        statement = select(Chapter, Book).join(Chapter.book).where(Chapter.id == chapter_id)
+        row = (await session.exec(statement)).first()
+        if row is None:
+            return row
+        chapter, book = row
+        return {
+            "chapter": chapter,
+            "book": book
+        }

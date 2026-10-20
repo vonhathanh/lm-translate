@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from "macros.html" import cover, pager %}
+{% block title %}Thư viện – {{ super() }}{% endblock %}
+
+{% block content %}
+<section class="wrap">
+  <h1 class="page-title">Thư viện</h1>
+  <p class="muted">{{ total }} bộ truyện</p>
+
+  {% if books %}
+  <ul class="shelf">
+    {% for b in books %}
+    <li>
+      <a class="book-card" href="{{ url_for('get_book_detail', book_id=b.id) }}">
+        {{ cover(b) }}
+        <h2 class="book-card-title">{{ b.title }}</h2>
+        <p class="muted">{{ b.chapter_count }} chương</p>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {{ pager(page, pages, 'get_all_books') }}
+  {% else %}
+  <p class="empty">Chưa có truyện nào. Hãy quay lại sau.</p>
+  {% endif %}
+</section>
+{% endblock %}
