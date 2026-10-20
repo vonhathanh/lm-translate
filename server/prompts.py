@@ -19,15 +19,13 @@ Dịch đoạn text tiếng Trung sau đây sang tiếng Việt. Tuân thủ ngh
 
 3. Hệ thống tu luyện: Tuyệt đối giữ nguyên tên cảnh giới (Luyện Khí, Trúc Cơ, Nguyên Anh...), tên công pháp, pháp bảo, đan dược.
 
-4. Thành ngữ: Dịch sang âm Hán Việt tương đương, hoặc dịch nghĩa sát nhất nhưng vẫn giữ vẻ cổ phong.
+4. Thành ngữ, cụm từ: Dịch sang âm Hán Việt tương đương, hoặc dịch nghĩa sát nhất nhưng vẫn giữ vẻ cổ phong.
 
 5. Cấu trúc câu: Dịch mượt mà, dễ đọc, tuyệt đối không thêm thắt ý kiến cá nhân hay bẻ cong ý nghĩa gốc của tác giả. 
 
 [Nâng cao - tùy chọn]: Dịch mượt mà, giữ giọng văn sảng văn, thêm chút hài hước nếu nguyên tác có.
 
-6. Dịch theo xu hướng convert một tý, không nên dịch sát quá.
-
-7. Trả về kết quả theo dạng JSON với 2 phần: "title" (tên chương) và "content" (nội dung của chương)
+6. Trả về kết quả theo dạng JSON với 2 phần: "title" (tên chương) và "content" (nội dung của chương)
 
 EXAMPLE JSON OUTPUT:
 {{
