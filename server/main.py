@@ -31,7 +31,7 @@ from database import (
     get_session,
 )
 from dto import HtmlPageTranslationRequest
-from fastapi import Depends, FastAPI, HTTPException, Request, UploadFile, status
+from fastapi import Depends, FastAPI, Form, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel.ext.asyncio.session import AsyncSession
 from translation_service import LLMClient
@@ -284,7 +284,8 @@ async def translate_html_page(request: HtmlPageTranslationRequest):
 
 
 @app.post("/api/v1/translate-text-from-file")
-async def translate_text_from_file(file: UploadFile):
+async def translate_text_from_file(file: UploadFile, start_index: Annotated[int, Form()], end_index: Annotated[int, Form()]):
+    logger.info(f"{start_index=}, {end_index=}")
     # ensure it's a text file
     if not file.filename.endswith(".txt"):
         raise HTTPException(
@@ -299,17 +300,18 @@ async def translate_text_from_file(file: UploadFile):
         text_content = content.decode("utf-8")
         chapters = re.split(r"第\d+章", text_content)
         for i in range(len(chapters)):
-            await queue.add(
-                "translate",
-                {"title": filename, "chapter_index": i, "content": chapters[i]},
-                {
-                    "attempts": 1,  # Total attempts, including the first try
-                    "backoff": {
-                        "type": "exponential",
-                        "delay": 1000,  # 1s, then 2s, then ...
+            if end_index >= i >= start_index:
+                await queue.add(
+                    "translate",
+                    {"title": filename, "chapter_index": i, "content": chapters[i]},
+                    {
+                        "attempts": 1,  # Total attempts, including the first try
+                        "backoff": {
+                            "type": "exponential",
+                            "delay": 1000,  # 1s, then 2s, then ...
+                        },
                     },
-                },
-            )
+                )
         return {"message": f"translating {len(chapters)} chapters, please wait"}
     except UnicodeDecodeError:
         raise HTTPException(
