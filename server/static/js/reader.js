@@ -39,11 +39,14 @@
   /* Reading progress + hide bars while scrolling down, show when scrolling up */
   var lastY = window.scrollY, ticking = false;
   function onScroll() {
-    var y = window.scrollY, max = d.scrollHeight - window.innerHeight;
-    prog.style.width = (max > 0 ? Math.min(100, y / max * 100) : 0) + '%';
-    var hide = y > lastY && y > 120 && panel.hidden;
-    if (Math.abs(y - lastY) > 8) {
-      bar.classList.toggle('is-hidden', hide); nav.classList.toggle('is-hidden', hide); lastY = y;
+    var y = window.scrollY, max = Math.max(0, d.scrollHeight - window.innerHeight);
+    prog.style.width = (max > 0 ? Math.max(0, Math.min(100, y / max * 100)) : 0) + '%';
+    var atStart = y <= 2, atEnd = max > 0 && y >= max - 2;
+    var hide = !atStart && !atEnd && y > lastY && y > 120 && panel.hidden;
+    if (Math.abs(y - lastY) > 8 || atStart || atEnd) {
+      bar.classList.toggle('is-hidden', hide);
+      nav.classList.toggle('is-hidden', hide);
+      lastY = y;
     }
     ticking = false;
   }
