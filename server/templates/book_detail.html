@@ -11,8 +11,8 @@
     <div class="detail-info">
       <h1>{{ book.title }}</h1>
       <p class="muted">{{ book.author }} – {{ book.chapter_count }} chương</p>
-      {% if first_chapter %}
-      <a class="btn btn-primary" href="{{ url_for('get_chapter_detail', chapter_id=first_chapter.id) }}">Đọc từ đầu</a>
+      {% if book.chapter_count > 0 %}
+      <a class="btn btn-primary" href="{{ url_for('get_chapter_detail', book_id=book.id, chapter_index=1) }}">Đọc từ đầu</a>
       {% endif %}
     </div>
   </div>
@@ -29,10 +29,10 @@
     {% if chapters %}
     <ul class="chapters">
       {% for c in chapters %}
-      <li><a href="{{ url_for('get_chapter_detail', chapter_id=c.id) }}">{{ c.title }}</a></li>
+      <li><a href="{{ url_for('get_chapter_detail', book_id=book.id, chapter_index=c.index) }}">Chương {{c.index}}: {{ c.title }}</a></li>
       {% endfor %}
     </ul>
-    {{ pager(page, pages, 'get_book_detail', book_id=book.id, _anchor='chapters') }}
+    {{ pager(page, pages, url_for('get_book_detail', book_id=book.id)) }}
     {% else %}
     <p class="empty">Truyện này chưa có chương nào.</p>
     {% endif %}

@@ -142,8 +142,8 @@ img { max-width: 100%; display: block; }
 .setting-row { display: flex; gap: 8px; }
 .setting-row .btn { flex: 1; padding: 0 8px; }
 
-.reader { max-width: 40rem; margin: 0 auto; padding: 84px 22px 140px; }
-@media (min-width: 700px) { .reader { max-width: 44rem; padding: 110px 32px 160px; } }
+.reader { max-width: 60rem; margin: 0 auto; padding: 84px 22px 140px; }
+@media (min-width: 700px) { .reader { max-width: 54rem; padding: 110px 32px 160px; } }
 .reader h1 { font-size: 1.55rem; text-align: center; text-wrap: balance; }
 @media (min-width: 700px) { .reader h1 { font-size: 2rem; } }
 .reader-meta { text-align: center; color: var(--muted); font-size: .85rem; margin: 12px 0 28px; padding-bottom: 20px; border-bottom: 1px solid var(--line); }

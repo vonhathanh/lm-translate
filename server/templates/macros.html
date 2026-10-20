@@ -10,17 +10,17 @@
 {% endmacro %}
 
 {# Prev / next pager. Extra keyword args are passed to url_for (e.g. book_id=1, _anchor='chapters'). #}
-{% macro pager(page, pages, endpoint) %}
+{% macro pager(page, pages, base_url, anchor='') %}
 {% if pages > 1 %}
 <nav class="pager" aria-label="Phân trang">
   {% if page > 1 %}
-    <a class="btn btn-quiet" rel="prev" href="{{ url_for(endpoint, page=page-1, **kwargs) }}">Trang trước</a>
+    <a class="btn btn-quiet" rel="prev" href="{{ base_url ~ '?page=' ~ (page - 1) ~ anchor }}">Trang trước</a>
   {% else %}
     <span class="btn btn-quiet is-disabled" aria-disabled="true">Trang trước</span>
   {% endif %}
   <span class="pager-status">Trang {{ page }} / {{ pages }}</span>
   {% if page < pages %}
-    <a class="btn btn-quiet" rel="next" href="{{ url_for(endpoint, page=page+1, **kwargs) }}">Trang sau</a>
+    <a class="btn btn-quiet" rel="next" href="{{ base_url ~ '?page=' ~ (page + 1) ~ anchor }}">Trang sau</a>
   {% else %}
     <span class="btn btn-quiet is-disabled" aria-disabled="true">Trang sau</span>
   {% endif %}

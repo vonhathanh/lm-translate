@@ -32,22 +32,22 @@
     {{ chapter.author or book.author }} – {{ chapter.word_count }} chữ{% if chapter.updated_at %} – cập nhật {{ chapter.updated_at }}{% endif %}
   </p>
   <div class="prose">
-    {% for p in chapter.paragraphs %}<p>{{ p }}</p>
+    {% for p in paragraphs %}<p>{{ p }}</p>
     {% endfor %}
   </div>
 </article>
 
 <nav class="reader-nav" id="nav" aria-label="Chuyển chương">
-  {% if prev_chapter %}
-  <a class="btn btn-quiet" rel="prev" href="{{ url_for('get_chapter_detail', chapter_id=prev_chapter.id) }}">‹ Chương trước</a>
+  {% if chapter.index > 1 %}
+  <a class="btn btn-quiet" rel="prev" href="{{ url_for('get_chapter_detail', book_id=book.id, chapter_index=chapter.index - 1) }}">‹ Chương trước</a>
   {% else %}
   <span class="btn btn-quiet is-disabled" aria-disabled="true">‹ Chương trước</span>
   {% endif %}
 
   <a class="btn btn-quiet" href="{{ url_for('get_book_detail', book_id=book.id) }}">Mục lục</a>
 
-  {% if next_chapter %}
-  <a class="btn btn-primary" rel="next" href="{{ url_for('get_chapter_detail', chapter_id=next_chapter.id) }}">Chương sau ›</a>
+  {% if chapter.index < book.chapter_count %}
+  <a class="btn btn-primary" rel="next" href="{{ url_for('get_chapter_detail', book_id=book.id, chapter_index=chapter.index + 1) }}">Chương sau ›</a>
   {% else %}
   <span class="btn btn-primary is-disabled" aria-disabled="true">Chương sau ›</span>
   {% endif %}

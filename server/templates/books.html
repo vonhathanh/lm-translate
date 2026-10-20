@@ -19,7 +19,7 @@
     </li>
     {% endfor %}
   </ul>
-  {{ pager(page, pages, 'get_all_books') }}
+  {{ pager(page, pages, url_for('get_all_books')) }}
   {% else %}
   <p class="empty">Chưa có truyện nào. Hãy quay lại sau.</p>
   {% endif %}

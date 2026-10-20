@@ -124,7 +124,7 @@ async def find_all_books(page: int, limit: int):
     async with SessionLocal() as session:
         count_statement = select(func.count()).select_from(Book)
         total = (await session.exec(count_statement)).one()
-        statement = select(Book).order_by(Book.id).offset(page * limit).limit(limit)
+        statement = select(Book).order_by(Book.id).offset((page-1) * limit).limit(limit)
         books = (await session.exec(statement)).fetchmany()
         return {"total": total, "books": books}
 
@@ -135,9 +135,9 @@ async def find_chapter(book_id: int, index: int):
         return (await session.exec(statement)).first()
 
 
-async def find_chapter_detail_by_id(chapter_id: int):
+async def find_chapter_detail_by_id(book_id: int, chapter_index: int):
     async with SessionLocal() as session:
-        statement = select(Chapter, Book).join(Chapter.book).where(Chapter.id == chapter_id)
+        statement = select(Chapter, Book).join(Chapter.book).where(Chapter.book_id == book_id, Chapter.index == chapter_index)
         row = (await session.exec(statement)).first()
         if row is None:
             return row

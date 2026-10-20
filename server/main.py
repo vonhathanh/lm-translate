@@ -1,3 +1,4 @@
+import math
 import os
 
 from dotenv import load_dotenv
@@ -204,24 +205,42 @@ def read_root():
     return "Hello World"
 
 @app.get("/api/v1/books", response_class=HTMLResponse)
-async def get_all_books(request: Request, page: int = 0, limit: int = 10) -> list[Book]:
+async def get_all_books(request: Request, page: int = 1, limit: int = 10) -> list[Book]:
+    if page < 1:
+        raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Page must be > 0",
+            )
     data = await find_all_books(page, limit)
     return templates.TemplateResponse(
-        request=request, name="books.html", context={"books": data["books"], "total": data["total"], "pages": data["total"] // limit}
+        request=request, name="books.html", context={"books": data["books"], "total": data["total"], "page": page, "pages": math.ceil(data["total"] / limit)}
     )
 
 @app.get("/api/v1/book/{book_id}", response_class=HTMLResponse)
-async def get_book_detail(request: Request, book_id: int):
+async def get_book_detail(request: Request, book_id: int, page: int = 1, limit: int = 10):
     context = await find_book_detail_by_id(book_id)
+    # TECH_DEBT
+    # paginated manually, ideally chapters should be cached and user won't have to call this API again
+    # but it's not supported for now
+    pages = math.ceil(len(context["chapters"])/limit)
+    context["chapters"] = context["chapters"][(page-1) * limit: (page) * limit]
     return templates.TemplateResponse(
-        request=request, name="book_detail.html", context=context
+        request=request, name="book_detail.html", context={
+            **context,
+            "page": page,
+            "pages": pages
+        }
     )
 
-@app.get("/api/v1/chapter/{chapter_id}", response_class=HTMLResponse)
-async def get_chapter_detail(request: Request, chapter_id: int):
-    context = await find_chapter_detail_by_id(chapter_id)
+@app.get("/api/v1/chapter/{book_id}/{chapter_index}", response_class=HTMLResponse)
+async def get_chapter_detail(request: Request, book_id: int, chapter_index: int):
+    context = await find_chapter_detail_by_id(book_id, chapter_index)
+    paragraphs = context["chapter"].content.split('\n')
     return templates.TemplateResponse(
-        request=request, name="chapter.html", context=context
+        request=request, name="chapter.html", context={
+            **context,
+            "paragraphs": paragraphs
+        }
     )
 
 
@@ -279,7 +298,7 @@ async def translate_text_from_file(file: UploadFile):
     try:
         text_content = content.decode("utf-8")
         chapters = re.split(r"第\d+章", text_content)
-        for i in range(1, 3):
+        for i in range(len(chapters)):
             await queue.add(
                 "translate",
                 {"title": filename, "chapter_index": i, "content": chapters[i]},
