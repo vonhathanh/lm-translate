@@ -125,8 +125,8 @@ async def find_all_books(page: int, limit: int):
     async with SessionLocal() as session:
         count_statement = select(func.count()).select_from(Book)
         total = (await session.exec(count_statement)).one()
-        statement = select(Book).order_by(Book.id).offset((page-1) * limit).limit(limit)
-        books = (await session.exec(statement)).fetchmany()
+        statement = select(Book).order_by(Book.id).offset((page - 1) * limit).limit(limit)
+        books = (await session.exec(statement)).all()
         return {"total": total, "books": books}
 
 
