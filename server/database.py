@@ -25,6 +25,7 @@ class Book(Base, table=True):
     chapters: list["Chapter"] = Relationship(back_populates="book")
     cover_image: str | None
     chapter_count: int = Field(default=0, nullable=False)
+    latest_chapter_index: int | None = Field(default=0, nullable=True)
 
     def __str__(self):
         return f"{self.id=}, {self.title=}"
