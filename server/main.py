@@ -44,7 +44,7 @@ logging.basicConfig(
     level=logging.INFO,  # Set minimum log level to capture
     format="%(asctime)s - %(levelname)s - %(message)s",  # Customize output format
     # filename='app.log',                           # Save logs to a file (omitting this prints to console)
-    filemode="w",  # 'w' overwrites file; 'a' appends (default)
+    # filemode="w",  # 'w' overwrites file; 'a' appends (default)
 )
 
 logger = logging.getLogger(__name__)
@@ -64,9 +64,11 @@ async def process(job, job_token):
 
             chapter = await find_chapter(book.id, chapter_index)
             if chapter:
-                logger.info(f"chapter for book: {title}, index: {chapter_index} already existed at chapter_id = {chapter.id}, skipping this job!")
+                logger.info(
+                    f"chapter for book: {title}, index: {chapter_index} already existed at chapter_id = {chapter.id}, skipping this job!"
+                )
                 return
-            
+
             translated_result = await llm_client.translate_single_chapter(
                 job.data["content"], os.getenv("LLM_MODEL", "deepseek-flash")
             )
@@ -77,9 +79,8 @@ async def process(job, job_token):
                         content=translated_result.content,
                         index=chapter_index,
                         raw=job.data["content"],
-                        book_id=book.id
-                    ),
-                    book.chapter_count
+                        book_id=book.id,
+                    )
                 )
                 logger.info(f"added new chapter, index: {chapter.index}, title: {chapter.title}")
         else:
@@ -204,17 +205,26 @@ def map_translated_text_to_html(
 def read_root():
     return "Hello World"
 
+
 @app.get("/api/v1/books", response_class=HTMLResponse)
 async def get_all_books(request: Request, page: int = 1, limit: int = 10) -> list[Book]:
     if page < 1:
         raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Page must be > 0",
-            )
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Page must be > 0",
+        )
     data = await find_all_books(page, limit)
     return templates.TemplateResponse(
-        request=request, name="books.html", context={"books": data["books"], "total": data["total"], "page": page, "pages": math.ceil(data["total"] / limit)}
+        request=request,
+        name="books.html",
+        context={
+            "books": data["books"],
+            "total": data["total"],
+            "page": page,
+            "pages": math.ceil(data["total"] / limit),
+        },
     )
+
 
 @app.get("/api/v1/book/{book_id}", response_class=HTMLResponse)
 async def get_book_detail(request: Request, book_id: int, page: int = 1, limit: int = 10):
@@ -222,27 +232,20 @@ async def get_book_detail(request: Request, book_id: int, page: int = 1, limit: 
     # TECH_DEBT
     # paginated manually, ideally chapters should be cached and user won't have to call this API again
     # but it's not supported for now
-    pages = math.ceil(len(context["chapters"])/limit)
-    context["chapters"] = context["chapters"][(page-1) * limit: (page) * limit]
+    pages = math.ceil(len(context["chapters"]) / limit)
+    context["chapters"] = context["chapters"][(page - 1) * limit : (page) * limit]
     return templates.TemplateResponse(
-        request=request, name="book_detail.html", context={
-            **context,
-            "page": page,
-            "pages": pages
-        }
+        request=request, name="book_detail.html", context={**context, "page": page, "pages": pages}
     )
+
 
 @app.get("/api/v1/chapter/{book_id}/{chapter_index}", response_class=HTMLResponse)
 async def get_chapter_detail(request: Request, book_id: int, chapter_index: int):
     context = await find_chapter_detail_by_id(book_id, chapter_index)
-    paragraphs = context["chapter"].content.split('\n')
+    paragraphs = context["chapter"].content.split("\n")
     return templates.TemplateResponse(
-        request=request, name="chapter.html", context={
-            **context,
-            "paragraphs": paragraphs
-        }
+        request=request, name="chapter.html", context={**context, "paragraphs": paragraphs}
     )
-
 
 
 @app.post("/api/v1/translate-html")
@@ -283,8 +286,10 @@ async def translate_html_page(request: HtmlPageTranslationRequest):
     return {"translatedText": new_html}
 
 
-@app.post("/api/v1/translate-text-from-file")
-async def translate_text_from_file(file: UploadFile, start_index: Annotated[int, Form()], end_index: Annotated[int, Form()]):
+@app.post("/api/v1/translate-fanqie-novel")
+async def translate_text_from_file(
+    file: UploadFile, start_index: Annotated[int, Form()], end_index: Annotated[int, Form()]
+):
     logger.info(f"{start_index=}, {end_index=}")
     # ensure it's a text file
     if not file.filename.endswith(".txt"):
@@ -299,7 +304,9 @@ async def translate_text_from_file(file: UploadFile, start_index: Annotated[int,
     try:
         text_content = content.decode("utf-8")
         chapters = re.split(r"第\d+章", text_content)
-        for i in range(len(chapters)):
+        for i in range(1, len(chapters)):
+            if len(chapters[i]) < 20:
+                continue            
             if end_index >= i >= start_index:
                 await queue.add(
                     "translate",
