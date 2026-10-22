@@ -80,7 +80,8 @@ async def process(job, job_token):
                         index=chapter_index,
                         raw=job.data["content"],
                         book_id=book.id,
-                    )
+                    ),
+                    book.chapter_count
                 )
                 logger.info(f"added new chapter, index: {chapter.index}, title: {chapter.title}")
         else:
