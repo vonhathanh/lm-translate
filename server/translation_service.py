@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import random
 import re
@@ -8,6 +9,8 @@ from google.genai import Client, types
 from openai import AsyncOpenAI
 from prompts import TRANSLATE_BOOK_PROMPT, TRANSLATE_HTML_PROMPT
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 GOOGLE_LLM_OPTIONS = {
     "gemini-3.5-flash",
@@ -69,6 +72,8 @@ class LLMClient:
                         messages=[{"role": "user", "content": prompt}],
                         response_format={"type": "json_object"},
                     )
+        logger.info(f"LLM usage: {response.usage}")
+
         result = loads(response.choices[0].message.content)
         if output_schema:
             return output_schema.model_validate(result)
