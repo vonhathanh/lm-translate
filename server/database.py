@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import JSON, Column
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlmodel import Field, Relationship, SQLModel, func, select, update
+from sqlmodel import Field, Relationship, SQLModel, func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 
@@ -25,17 +25,10 @@ class Book(Base, table=True):
     chapters: list["Chapter"] = Relationship(back_populates="book")
     cover_image: str | None
     chapter_count: int = Field(default=0, nullable=False)
-    latest_chapter_index: int | None = Field(default=0, nullable=True)
-
-    def __str__(self):
-        return f"{self.id=}, {self.title=}"
-
-    def __repr__(self):
-        return f"{self.id=}, {self.title=}"
 
 
 class Chapter(Base, table=True):
-    index: int
+    index: int | None
     title: str
     content: str
     raw: str | None
@@ -71,13 +64,9 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-async def add_chapter(chapter: Chapter, chapter_count: int):
+async def add_chapter(chapter: Chapter):
     async with SessionLocal() as session, session.begin():
         session.add(chapter)
-        statement = (
-            update(Book).where(Book.id == chapter.book_id).values(chapter_count=chapter_count + 1)
-        )
-        await session.exec(statement)
         await session.flush()
         return chapter
 
@@ -101,6 +90,7 @@ async def find_book_detail_by_id(book_id: int):
             select(Book, Chapter.id, Chapter.index, Chapter.title, Chapter.updated_at)
             .join(Book.chapters)
             .where(Book.id == book_id)
+            .order_by(Chapter.index)
         )
         rows = (await session.exec(statement)).all()
         if not rows:
@@ -138,12 +128,19 @@ async def find_chapter(book_id: int, index: int):
 
 async def find_chapter_detail_by_id(book_id: int, chapter_index: int):
     async with SessionLocal() as session:
-        statement = select(Chapter, Book).join(Chapter.book).where(Chapter.book_id == book_id, Chapter.index == chapter_index)
+        statement = (
+            select(Chapter, Book)
+            .join(Chapter.book)
+            .where(Chapter.book_id == book_id, Chapter.index == chapter_index)
+        )
         row = (await session.exec(statement)).first()
         if row is None:
             return row
         chapter, book = row
-        return {
-            "chapter": chapter,
-            "book": book
-        }
+        return {"chapter": chapter, "book": book}
+
+
+async def find_chapter_indices(book_id: int):
+     async with SessionLocal() as session:
+        statement = select(Chapter.id, Chapter.index, Chapter.title).where(Chapter.book_id == book_id).order_by(Chapter.index)
+        return (await session.exec(statement)).all()
