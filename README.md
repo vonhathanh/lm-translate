@@ -15,3 +15,9 @@ migration script according to updated models definition in code:
 `alembic revision --autogenerate -m "add raw colun to book"`
 
 Run the migration: `alembic upgrade head`
+
+# Add trigger to Database 
+
+Run `alembic revision -m "commit message"` -> write the trigger definition & add trigger to db in the newly created migration file
+
+Run `alembic upgrade head`
