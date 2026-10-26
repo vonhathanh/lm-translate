@@ -1,6 +1,9 @@
+import bisect
+import json
 import math
 import os
 
+import redis.asyncio as redis
 from dotenv import load_dotenv
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -28,17 +31,15 @@ from database import (
     find_book_detail_by_id,
     find_chapter,
     find_chapter_detail_by_id,
-    get_session,
+    find_chapter_indices,
 )
 from dto import HtmlPageTranslationRequest
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from sqlmodel.ext.asyncio.session import AsyncSession
 from translation_service import LLMClient
 
 MAX_TOKENS_PER_BATCH = 500
 
-SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 logging.basicConfig(
     level=logging.INFO,  # Set minimum log level to capture
@@ -54,20 +55,23 @@ async def process(job, job_token):
     logger.info(f"Job id: {job.id}, Name: {job.name}")
     try:
         if job.name == "translate":
-            title = job.data["title"]
+            book_title = job.data["book_title"]
             chapter_index = job.data["chapter_index"]
 
-            book = await find_book(title)
+            book = await find_book(book_title)
             if book is None:
-                book = await add_book(Book(title=title))
+                book = await add_book(Book(title=book_title))
                 logger.info(f"added new book, id: {book.id}")
+
+            logger.info(f"found book, id= {book.id}")
 
             chapter = await find_chapter(book.id, chapter_index)
             if chapter:
                 logger.info(
-                    f"chapter for book: {title}, index: {chapter_index} already existed at chapter_id = {chapter.id}, skipping this job!"
+                    f"chapter for book: {book_title}, index: {chapter_index} already existed at chapter_id = {chapter.id}, skipping this job!"
                 )
                 return
+            logger.info(f"chapter with index={chapter_index} not found, translating...")
 
             translated_result = await llm_client.translate_single_chapter(
                 job.data["content"], os.getenv("LLM_MODEL", "deepseek-flash")
@@ -77,28 +81,36 @@ async def process(job, job_token):
                     Chapter(
                         title=translated_result.title,
                         content=translated_result.content,
-                        index=chapter_index,
                         raw=job.data["content"],
                         book_id=book.id,
+                        index=chapter_index,
                     ),
-                    book.chapter_count
                 )
                 logger.info(f"added new chapter, index: {chapter.index}, title: {chapter.title}")
         else:
             raise ValueError("invalid job name")
     except Exception as e:
-        logger.info(f"{e=}")
+        logger.info(f"Job id {job.id} failed, error message: {e}")
 
 
+REDIS_HOST = os.getenv("REDIS_HOST")
 QUEUE_NAME = "fanqie-translation-queue"
-queue = Queue(QUEUE_NAME, {"connection": "redis://localhost:6379"})
-worker = Worker(QUEUE_NAME, process, {"connection": "redis://localhost:6379"})
+queue = Queue(QUEUE_NAME, {"connection": f"redis://{REDIS_HOST}:6379"})
+worker = Worker(QUEUE_NAME, process, {"connection": f"redis://{REDIS_HOST}:6379"})
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await create_db_and_tables()
+    # Startup: Initialize the Redis connection pool
+    app.state.redis_pool = redis.ConnectionPool(
+        host=REDIS_HOST,
+        port=6379,
+        db=0,
+        decode_responses=True,  # Automatically converts bytes to strings
+    )
     yield
+    await app.state.redis_pool.disconnect()
     await queue.close()
     await worker.close()
 
@@ -113,6 +125,19 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Dependency Injection provider to access Redis in routes
+async def get_redis():
+    # Yields a client session from the global connection pool
+    client = redis.Redis(connection_pool=app.state.redis_pool)
+    try:
+        yield client
+    finally:
+        await client.aclose()
+
+
+RedisDep = Annotated[redis.Redis, Depends(get_redis)]
 
 llm_client = LLMClient()
 
@@ -233,6 +258,7 @@ async def get_book_detail(request: Request, book_id: int, page: int = 1, limit: 
     # TECH_DEBT
     # paginated manually, ideally chapters should be cached and user won't have to call this API again
     # but it's not supported for now
+    # can use Redis to cache the content
     pages = math.ceil(len(context["chapters"]) / limit)
     context["chapters"] = context["chapters"][(page - 1) * limit : (page) * limit]
     return templates.TemplateResponse(
@@ -241,11 +267,32 @@ async def get_book_detail(request: Request, book_id: int, page: int = 1, limit: 
 
 
 @app.get("/api/v1/chapter/{book_id}/{chapter_index}", response_class=HTMLResponse)
-async def get_chapter_detail(request: Request, book_id: int, chapter_index: int):
+async def get_chapter_detail(request: Request, book_id: int, chapter_index: int, r: RedisDep):
     context = await find_chapter_detail_by_id(book_id, chapter_index)
+    redis_key = f"book_{book_id}:index"
+    chapter_indices = await r.get(redis_key)
+    if not chapter_indices:
+        chapter_indices = await find_chapter_indices(book_id)
+        if not chapter_indices:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Can't find chapter indices",
+            )
+        chapter_indices = [dict(row._mapping) for row in chapter_indices]
+        await r.set(redis_key, json.dumps(chapter_indices))
+    else:
+        chapter_indices = json.loads(chapter_indices)
+    index = bisect.bisect_left(chapter_indices, chapter_index, key=lambda x: x["index"])
+    prev, next = None, None
+    if index > 0:
+        prev = chapter_indices[index - 1]["index"]
+    if index < len(chapter_indices) - 1:
+        next = chapter_indices[index + 1]["index"]
     paragraphs = context["chapter"].content.split("\n")
     return templates.TemplateResponse(
-        request=request, name="chapter.html", context={**context, "paragraphs": paragraphs}
+        request=request,
+        name="chapter.html",
+        context={**context, "paragraphs": paragraphs, "prev_index": prev, "next_index": next},
     )
 
 
@@ -288,9 +335,13 @@ async def translate_html_page(request: HtmlPageTranslationRequest):
 
 
 @app.post("/api/v1/translate-fanqie-novel")
-async def translate_text_from_file(
-    file: UploadFile, start_index: Annotated[int, Form()], end_index: Annotated[int, Form()]
+async def translate_fanqie_novel(
+    file: UploadFile,
+    start_index: Annotated[int | None, Form()],
+    end_index: Annotated[int | None, Form()],
 ):
+    start_index = 0 if start_index is None else start_index
+    end_index = 2**32 if end_index is None else end_index
     logger.info(f"{start_index=}, {end_index=}")
     # ensure it's a text file
     if not file.filename.endswith(".txt"):
@@ -304,14 +355,23 @@ async def translate_text_from_file(
 
     try:
         text_content = content.decode("utf-8")
-        chapters = re.split(r"第\d+章", text_content)
-        for i in range(1, len(chapters)):
-            if len(chapters[i]) < 20:
-                continue            
-            if end_index >= i >= start_index:
+        chapter_index_regex = r"(第\d+章)"
+        chapter_index: int = 0
+        chapters = re.split(chapter_index_regex, text_content)
+        for i in range(len(chapters)):
+            if re.match(chapter_index_regex, chapters[i]):
+                chapter_index = int(chapters[i][1:-1])
+                continue
+            elif len(chapters[i]) < 20:
+                continue
+            if end_index >= chapter_index >= start_index:
                 await queue.add(
                     "translate",
-                    {"title": filename, "chapter_index": i, "content": chapters[i]},
+                    {
+                        "book_title": filename,
+                        "chapter_index": chapter_index,
+                        "content": chapters[i],
+                    },
                     {
                         "attempts": 1,  # Total attempts, including the first try
                         "backoff": {
