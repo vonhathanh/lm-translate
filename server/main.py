@@ -269,6 +269,25 @@ async def get_book_detail(request: Request, book_id: int, page: int = 1, limit: 
 @app.get("/api/v1/chapter/{book_id}/{chapter_index}", response_class=HTMLResponse)
 async def get_chapter_detail(request: Request, book_id: int, chapter_index: int, r: RedisDep):
     context = await find_chapter_detail_by_id(book_id, chapter_index)
+    paragraphs = context["chapter"].content.split("\n")
+
+    chapter_indices = await get_chapter_indices(book_id, r)
+    index = bisect.bisect_left(chapter_indices, chapter_index, key=lambda x: x["index"])
+
+    prev, next = None, None
+    if index > 0:
+        prev = chapter_indices[index - 1]["index"]
+    if index < len(chapter_indices) - 1:
+        next = chapter_indices[index + 1]["index"]
+    
+    return templates.TemplateResponse(
+        request=request,
+        name="chapter.html",
+        context={**context, "paragraphs": paragraphs, "prev_index": prev, "next_index": next},
+    )
+
+
+async def get_chapter_indices(book_id: int, r: RedisDep):
     redis_key = f"book_{book_id}:index"
     chapter_indices = await r.get(redis_key)
     if not chapter_indices:
@@ -278,23 +297,12 @@ async def get_chapter_detail(request: Request, book_id: int, chapter_index: int,
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Can't find chapter indices",
             )
+        # convert sql model row into dict
         chapter_indices = [dict(row._mapping) for row in chapter_indices]
         await r.set(redis_key, json.dumps(chapter_indices))
     else:
         chapter_indices = json.loads(chapter_indices)
-    index = bisect.bisect_left(chapter_indices, chapter_index, key=lambda x: x["index"])
-    prev, next = None, None
-    if index > 0:
-        prev = chapter_indices[index - 1]["index"]
-    if index < len(chapter_indices) - 1:
-        next = chapter_indices[index + 1]["index"]
-    paragraphs = context["chapter"].content.split("\n")
-    return templates.TemplateResponse(
-        request=request,
-        name="chapter.html",
-        context={**context, "paragraphs": paragraphs, "prev_index": prev, "next_index": next},
-    )
-
+    return chapter_indices
 
 @app.post("/api/v1/translate-html")
 async def translate_html_page(request: HtmlPageTranslationRequest):
@@ -337,28 +345,18 @@ async def translate_html_page(request: HtmlPageTranslationRequest):
 @app.post("/api/v1/translate-fanqie-novel")
 async def translate_fanqie_novel(
     file: UploadFile,
-    start_index: Annotated[int | None, Form()],
-    end_index: Annotated[int | None, Form()],
+    start_index: Annotated[int | None, Form()] = None,
+    end_index: Annotated[int | None, Form()] = None,
 ):
-    start_index = 0 if start_index is None else start_index
-    end_index = 2**32 if end_index is None else end_index
-    logger.info(f"{start_index=}, {end_index=}")
-    # ensure it's a text file
-    if not file.filename.endswith(".txt"):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only .txt files are allowed.",
-        )
-    filename = file.filename.split(".txt")[0]
-
-    content = await file.read()
+    start_index, end_index, filename, content = await validate_translate_fanqie_novel_input(
+        file, start_index, end_index
+    )
 
     try:
-        text_content = content.decode("utf-8")
         chapter_index_regex = r"(第\d+章)"
         chapter_index: int = 0
-        chapters = re.split(chapter_index_regex, text_content)
-        for i in range(len(chapters)):
+        chapters = re.split(chapter_index_regex, content.decode("utf-8"))
+        for i in range(1, len(chapters)):
             if re.match(chapter_index_regex, chapters[i]):
                 chapter_index = int(chapters[i][1:-1])
                 continue
@@ -380,9 +378,29 @@ async def translate_fanqie_novel(
                         },
                     },
                 )
-        return {"message": f"translating {len(chapters)} chapters, please wait"}
+        return {"message": "translating, please wait"}
     except UnicodeDecodeError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Could not decode file. Please ensure it is UTF-8 encoded.",
         )
+
+
+async def validate_translate_fanqie_novel_input(
+    file: UploadFile,
+    start_index: Annotated[int | None, Form()],
+    end_index: Annotated[int | None, Form()],
+):
+    start_index = 0 if start_index is None else start_index
+    end_index = 2**32 if end_index is None else end_index
+    logger.info(f"{start_index=}, {end_index=}")
+    # ensure it's a text file
+    if not file.filename.endswith(".txt"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Only .txt files are allowed.",
+        )
+    filename = file.filename.split(".txt")[0]
+
+    content = await file.read()
+    return start_index, end_index, filename, content
