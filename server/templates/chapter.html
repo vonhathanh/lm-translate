@@ -27,7 +27,7 @@
 
 {% block content %}
 <article class="reader">
-  <h1>{{ chapter.title }}</h1>
+  <h1>Chương {{ chapter.index }} – {{ chapter.title }}</h1>
   <p class="reader-meta">
     {{ chapter.author or book.author }} – {{ chapter.word_count }} chữ{% if chapter.updated_at %} – cập nhật {{ chapter.updated_at }}{% endif %}
   </p>
