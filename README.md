@@ -28,10 +28,11 @@ Run `alembic upgrade head`
 
 2. Create a network bridge for the containers if we run postgres, redis in separated docker command:
 
-`docker network create localnet`
+    `docker network create localnet`
 
-Note, this can be skipped by using docker compose, just not a fan of it.
+    Note, this can be skipped by using docker compose, just not a fan of it.
 
-3. Run the image by this command: `docker run -d --network localnet --name lm-translate -p 5000:5000 lm-translate`
+3. Run the image by this command: 
+    `docker run -d --network localnet --name lm-translate -p 5000:5000 lm-translate`
 
-Or just using a docker GUI to run the newly built image
+    Or just using a docker GUI to run the newly built image
