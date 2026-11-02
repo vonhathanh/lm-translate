@@ -356,6 +356,7 @@ async def translate_fanqie_novel(
         chapter_index_regex = r"(第\d+章)"
         chapter_index: int = 0
         chapters = re.split(chapter_index_regex, content.decode("utf-8"))
+        logger.info(f"Found ~={len(chapters) // 2} chapters in the file {filename}.")
         for i in range(1, len(chapters)):
             if re.match(chapter_index_regex, chapters[i]):
                 chapter_index = int(chapters[i][1:-1])
@@ -363,6 +364,7 @@ async def translate_fanqie_novel(
             elif len(chapters[i]) < 20:
                 continue
             if end_index >= chapter_index >= start_index:
+                logger.info(f"Adding chapter {chapter_index} to the translation queue.")
                 await queue.add(
                     "translate",
                     {
