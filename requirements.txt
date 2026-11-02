@@ -1,4 +1,5 @@
  fastapi >= 0.136.0
+ fastapi[standard]>=0.136.0
  beautifulsoup4 >= 4.14.0
  google-genai >= 2.4.0
  openai >= 2.37.0
