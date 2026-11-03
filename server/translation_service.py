@@ -71,7 +71,7 @@ class LLMClient:
                         model=model,
                         messages=[{"role": "user", "content": prompt}],
                         response_format={"type": "json_object"},
-                        extra_body={"thinking": {"type": "disabled"}}
+                        reasoning_effort="minimal",
                     )
         logger.info(f"LLM usage: {response.usage}")
 
