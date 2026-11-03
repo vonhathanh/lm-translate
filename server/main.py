@@ -54,9 +54,8 @@ logger = logging.getLogger(__name__)
 
 REDIS_HOST = os.getenv("REDIS_HOST")
 QUEUE_NAME = "fanqie-translation-queue"
-NUM_WORKERS = 2
 queue = Queue(QUEUE_NAME, {"connection": f"redis://{REDIS_HOST}:6379"})
-workers = [Worker(QUEUE_NAME, process, {"connection": f"redis://{REDIS_HOST}:6379"}) for _ in range(NUM_WORKERS)]
+worker = Worker(QUEUE_NAME, process, {"connection": f"redis://{REDIS_HOST}:6379"})
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -68,12 +67,10 @@ async def lifespan(app: FastAPI):
         db=0,
         decode_responses=True,  # Automatically converts bytes to strings
     )
-    await queue.setGlobalRateLimit(1, 60000)  # 1 job per minute
     yield
     await app.state.redis_pool.disconnect()
     await queue.close()
-    for worker in workers:
-        await worker.close()
+    await worker.close()
 
 
 app = FastAPI(lifespan=lifespan)
