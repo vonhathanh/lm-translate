@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 
@@ -17,15 +18,22 @@ from translation_service import llm_client
 logger = logging.getLogger(__name__)
 
 
+DEFAULT_JOB_TIMEOUT = 60 * 10  # 10 minutes
+
+
+async def _process_job(job):
+    if job.name == "translate":
+        await translate_new_chapter(job)
+    elif job.name == "translate_chapter":
+        await translate_current_chapter(job)
+    else:
+        raise ValueError("invalid job name")
+
 async def process(job, job_token):
-    logger.info(f"Job id: {job.id}, Name: {job.name}")
+    logger.info(f"Got new Job, id: {job.id}, Name: {job.name}")
     try:
-        if job.name == "translate":
-            await translate_new_chapter(job)
-        elif job.name == "translate_chapter":
-            await translate_current_chapter(job)
-        else:
-            raise ValueError("invalid job name")
+        timeout = job.timeout if hasattr(job, "timeout") else DEFAULT_JOB_TIMEOUT
+        await asyncio.wait_for(_process_job(job), timeout=timeout)
     except Exception as e:
         logger.error(f"Job id {job.id} failed, error message: {e}")
 
