@@ -8,6 +8,6 @@ RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt
 
 COPY ./server /code/server
 
-COPY ./.env /code/.env
+COPY ./.env.docker /code/.env
 
 CMD ["fastapi", "run", "server/main.py", "--port", "5000"]
