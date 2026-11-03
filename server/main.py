@@ -54,9 +54,9 @@ logger = logging.getLogger(__name__)
 
 REDIS_HOST = os.getenv("REDIS_HOST")
 QUEUE_NAME = "fanqie-translation-queue"
+NUM_WORKERS = 2
 queue = Queue(QUEUE_NAME, {"connection": f"redis://{REDIS_HOST}:6379"})
-worker = Worker(QUEUE_NAME, process, {"connection": f"redis://{REDIS_HOST}:6379"})
-
+workers = [Worker(QUEUE_NAME, process, {"connection": f"redis://{REDIS_HOST}:6379"}) for _ in range(NUM_WORKERS)]
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -68,10 +68,12 @@ async def lifespan(app: FastAPI):
         db=0,
         decode_responses=True,  # Automatically converts bytes to strings
     )
+    await queue.setGlobalRateLimit(1, 60000)  # 1 job per minute
     yield
     await app.state.redis_pool.disconnect()
     await queue.close()
-    await worker.close()
+    for worker in workers:
+        await worker.close()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -315,6 +317,7 @@ async def translate_chapters(book_id: int, request: TranslateBookRequest, redis:
 async def get_chapter_detail(request: Request, book_id: int, chapter_index: int, r: RedisDep):
     context = await find_chapter_detail_by_book_index(book_id, chapter_index)
     content = context["chapter"].content or context["chapter"].raw
+
     chapter_indices = await get_chapter_indices(book_id, r)
     index = bisect.bisect_left(chapter_indices, chapter_index, key=lambda x: x["index"])
 
@@ -367,52 +370,6 @@ async def translate_html_page(request: HtmlPageTranslationRequest):
     new_html = map_translated_text_to_html(soup, batches, results)
 
     return {"translatedText": new_html}
-
-
-@app.post("/api/v1/translate/fanqie-novel")
-async def translate_fanqie_novel(
-    file: UploadFile,
-    start_index: Annotated[int | None, Form()] = None,
-    end_index: Annotated[int | None, Form()] = None,
-):
-    start_index, end_index, filename, content = await validate_translate_fanqie_novel_input(
-        file, start_index, end_index
-    )
-
-    try:
-        chapter_index_regex = r"(第\d+章)"
-        chapter_index: int = 0
-        chapters = re.split(chapter_index_regex, content.decode("utf-8"))
-        logger.info(f"Found ~={len(chapters) // 2} chapters in the file {filename}.")
-        for i in range(1, len(chapters)):
-            if re.match(chapter_index_regex, chapters[i]):
-                chapter_index = int(chapters[i][1:-1])
-                continue
-            elif len(chapters[i]) < 20:
-                continue
-            if end_index >= chapter_index >= start_index:
-                logger.info(f"Adding chapter {chapter_index} to the translation queue.")
-                await queue.add(
-                    "translate",
-                    {
-                        "book_title": filename,
-                        "chapter_index": chapter_index,
-                        "content": chapters[i],
-                    },
-                    {
-                        "attempts": 1,  # Total attempts, including the first try
-                        "backoff": {
-                            "type": "exponential",
-                            "delay": 1000,  # 1s, then 2s, then ...
-                        },
-                    },
-                )
-        return {"message": "translating, please wait"}
-    except UnicodeDecodeError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Could not decode file. Please ensure it is UTF-8 encoded.",
-        )
 
 
 async def validate_translate_fanqie_novel_input(
