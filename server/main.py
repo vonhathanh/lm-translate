@@ -23,8 +23,12 @@ from bs4 import BeautifulSoup, NavigableString
 from bullmq import Queue, Worker
 from database import (
     Book,
+    Chapter,
+    add_book,
+    add_chapters,
     create_db_and_tables,
     find_all_books,
+    find_book,
     find_book_detail_by_id,
     find_chapter_detail_by_book_index,
     find_chapter_indices,
@@ -206,7 +210,7 @@ async def get_all_books(request: Request, page: int = 1, limit: int = 10) -> lis
 
 
 @app.get("/api/v1/book/{book_id}", response_class=HTMLResponse)
-async def get_book_detail(request: Request, book_id: int, page: int = 1, limit: int = 10):
+async def get_book_detail(request: Request, book_id: int, page: int = 1, limit: int = 50):
     context = await find_book_detail_by_id(book_id)
     # TECH_DEBT
     # paginated manually, ideally chapters should be cached and user won't have to call this API again
@@ -217,6 +221,45 @@ async def get_book_detail(request: Request, book_id: int, page: int = 1, limit: 
     return templates.TemplateResponse(
         request=request, name="book_detail.html", context={**context, "page": page, "pages": pages}
     )
+
+@app.post("/api/v1/book/fanqie/raw")
+async def insert_raw_fanqie_novel(
+    r: RedisDep,
+    file: UploadFile,
+    start_index: Annotated[int | None, Form()] = None,
+    end_index: Annotated[int | None, Form()] = None,
+):
+    start_index, end_index, filename, content = await validate_translate_fanqie_novel_input(
+        file, start_index, end_index
+    )
+
+    book = await find_book(filename)
+    if book is None:
+        book = await add_book(Book(title=filename))
+        logger.info(f"added new book, id: {book.id}, title: {filename}")
+
+    try:
+        chapter_index_regex = r"(第\d+章)"
+        chapter_index: int = 0
+        chapters = re.split(chapter_index_regex, content.decode("utf-8"))
+        logger.info(f"Found ~={len(chapters) // 2} chapters in the file {filename}.")
+        rows = []
+        for i in range(1, len(chapters)):
+            if re.match(chapter_index_regex, chapters[i]):
+                chapter_index = int(chapters[i][1:-1])
+                continue
+            elif len(chapters[i]) < 20:
+                continue
+            if end_index >= chapter_index >= start_index:
+                rows.append(Chapter(title=f"chapter_{chapter_index}", raw=chapters[i], index=chapter_index, book_id=book.id))
+        await add_chapters(rows)
+        await r.delete(f"book_{book.id}:index")
+        return {"message": f"successfully inserted {len(rows)} chapters into the database"}
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Could not decode file. Please ensure it is UTF-8 encoded.",
+        )
 
 @app.post("/api/v1/chapter/translate/{chapter_id}")
 async def translate_chapter(chapter_id: int):
