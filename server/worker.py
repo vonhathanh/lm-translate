@@ -4,6 +4,7 @@ import os
 from database import (
     Book,
     Chapter,
+    ChapterStatus,
     add_book,
     add_chapter,
     find_book,
@@ -41,10 +42,11 @@ async def translate_current_chapter(job):
     if translated_result:
         chapter = await update_chapter(
             chapter.id,
-            translated_result.title,
-            translated_result.content,
+            title=translated_result.title,
+            content=translated_result.content,
+            status=ChapterStatus.translated
         )
-        logger.info(f"translated chapter, index: {chapter.index}, title: {chapter.title}")
+        logger.info(f"translated chapter id: {chapter_id}, title: {translated_result.title}")
     else:
         logger.error(f"translation failed for chapter id: {chapter.id}, result: {translated_result}")
     

@@ -159,7 +159,7 @@ async def find_chapter_indices(book_id: int):
         return (await session.exec(statement)).all()
 
 
-async def update_chapter(chapter_id: int, title: str, content: str):
+async def update_chapter(chapter_id: int, **kwargs):
     async with SessionLocal() as session, session.begin():
-        statement = update(Chapter).where(Chapter.id == chapter_id).values(title=title, content=content, status=ChapterStatus.translated)
+        statement = update(Chapter).where(Chapter.id == chapter_id).values(**kwargs)
         await session.exec(statement)
