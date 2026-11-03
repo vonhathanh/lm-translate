@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy import JSON, Column
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlmodel import Field, Relationship, SQLModel, func, select, update
+from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint, func, select, update
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 
@@ -34,6 +34,9 @@ class ChapterStatus(str, enum.Enum):
     translated = "translated"
 
 class Chapter(Base, table=True):
+    __table_args__ = (
+        UniqueConstraint("book_id", "index", name="uq_chapter_book_index"),
+    )
     index: int | None
     title: str
     content: str | None
@@ -76,6 +79,12 @@ async def add_chapter(chapter: Chapter):
         session.add(chapter)
         await session.flush()
         return chapter
+
+async def add_chapters(chapters: list[Chapter]):
+    async with SessionLocal() as session, session.begin():
+        session.add_all(chapters)
+        await session.flush()
+        return chapters
 
 
 async def add_book(book: Book):
