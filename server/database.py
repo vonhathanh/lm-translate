@@ -1,4 +1,5 @@
 import enum
+import logging
 import os
 from collections.abc import AsyncGenerator
 from datetime import datetime
@@ -9,6 +10,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import Field, Relationship, SQLModel, UniqueConstraint, func, select, update
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+logger = logging.getLogger(__name__)
 
 class Base(SQLModel, table=False):
     id: int | None = Field(default=None, primary_key=True)

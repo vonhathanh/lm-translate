@@ -1,24 +1,18 @@
-import bisect
-import json
-import math
-import os
-
-import redis.asyncio as redis
-from dotenv import load_dotenv
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from worker import process
-
+from dotenv import load_dotenv  # noqa: I001
 load_dotenv()
 
 import asyncio
+import bisect
+import json
 import logging
+import math
+import os
 import re
 import time
 from contextlib import asynccontextmanager
 from typing import Annotated
 
+import redis.asyncio as redis
 from bs4 import BeautifulSoup, NavigableString
 from bullmq import Queue, Worker
 from database import (
@@ -39,7 +33,11 @@ from database import (
 from dto import HtmlPageTranslationRequest, TranslateBookRequest
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from translation_service import llm_client
+from worker import process
 
 MAX_TOKENS_PER_BATCH = 500
 
