@@ -1,3 +1,4 @@
+import enum
 import os
 from collections.abc import AsyncGenerator
 from datetime import datetime
@@ -5,7 +6,7 @@ from datetime import datetime
 from sqlalchemy import JSON, Column
 from sqlalchemy.engine import URL
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlmodel import Field, Relationship, SQLModel, func, select
+from sqlmodel import Field, Relationship, SQLModel, func, select, update
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 
@@ -27,13 +28,19 @@ class Book(Base, table=True):
     chapter_count: int = Field(default=0, nullable=False)
 
 
+class ChapterStatus(str, enum.Enum):
+    raw = "raw"
+    translating = "translating"
+    translated = "translated"
+
 class Chapter(Base, table=True):
     index: int | None
     title: str
-    content: str
-    raw: str | None
+    content: str | None
+    raw: str
     book_id: int = Field(nullable=False, foreign_key="book.id")
     book: Book | None = Relationship(back_populates="chapters")
+    status: ChapterStatus = Field(default=ChapterStatus.raw, nullable=False)
 
 
 engine = create_async_engine(
@@ -126,7 +133,13 @@ async def find_chapter(book_id: int, index: int):
         return (await session.exec(statement)).first()
 
 
-async def find_chapter_detail_by_id(book_id: int, chapter_index: int):
+async def find_chapter_by_id(chapter_id: int):
+    async with SessionLocal() as session:
+        statement = select(Chapter).where(Chapter.id == chapter_id)
+        return (await session.exec(statement)).first()
+
+
+async def find_chapter_detail_by_book_index(book_id: int, chapter_index: int):
     async with SessionLocal() as session:
         statement = (
             select(Chapter, Book)
@@ -144,3 +157,9 @@ async def find_chapter_indices(book_id: int):
      async with SessionLocal() as session:
         statement = select(Chapter.id, Chapter.index, Chapter.title).where(Chapter.book_id == book_id).order_by(Chapter.index)
         return (await session.exec(statement)).all()
+
+
+async def update_chapter(chapter_id: int, title: str, content: str):
+    async with SessionLocal() as session, session.begin():
+        statement = update(Chapter).where(Chapter.id == chapter_id).values(title=title, content=content, status=ChapterStatus.translated)
+        await session.exec(statement)

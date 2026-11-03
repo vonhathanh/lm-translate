@@ -192,3 +192,5 @@ def loads(s: str):
 
     # If none of the above parsing worked, re-raise the original JSONDecodeError.
     raise fallback_error
+
+llm_client = LLMClient()

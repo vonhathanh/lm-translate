@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from worker import process
 
 load_dotenv()
 
@@ -22,21 +23,16 @@ from bs4 import BeautifulSoup, NavigableString
 from bullmq import Queue, Worker
 from database import (
     Book,
-    Chapter,
-    add_book,
-    add_chapter,
     create_db_and_tables,
     find_all_books,
-    find_book,
     find_book_detail_by_id,
-    find_chapter,
-    find_chapter_detail_by_id,
+    find_chapter_detail_by_book_index,
     find_chapter_indices,
 )
 from dto import HtmlPageTranslationRequest
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
-from translation_service import LLMClient
+from translation_service import llm_client
 
 MAX_TOKENS_PER_BATCH = 500
 
@@ -49,48 +45,6 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
-
-
-async def process(job, job_token):
-    logger.info(f"Job id: {job.id}, Name: {job.name}")
-    try:
-        if job.name == "translate":
-            book_title = job.data["book_title"]
-            chapter_index = job.data["chapter_index"]
-
-            book = await find_book(book_title)
-            if book is None:
-                book = await add_book(Book(title=book_title))
-                logger.info(f"added new book, id: {book.id}")
-
-            logger.info(f"found book, id= {book.id}")
-
-            chapter = await find_chapter(book.id, chapter_index)
-            if chapter:
-                logger.info(
-                    f"chapter for book: {book_title}, index: {chapter_index} already existed at chapter_id = {chapter.id}, skipping this job!"
-                )
-                return
-            logger.info(f"chapter with index={chapter_index} not found, translating...")
-
-            translated_result = await llm_client.translate_single_chapter(
-                job.data["content"], os.getenv("LLM_MODEL", "deepseek-flash")
-            )
-            if translated_result:
-                chapter = await add_chapter(
-                    Chapter(
-                        title=translated_result.title,
-                        content=translated_result.content,
-                        raw=job.data["content"],
-                        book_id=book.id,
-                        index=chapter_index,
-                    ),
-                )
-                logger.info(f"added new chapter, index: {chapter.index}, title: {chapter.title}")
-        else:
-            raise ValueError("invalid job name")
-    except Exception as e:
-        logger.info(f"Job id {job.id} failed, error message: {e}")
 
 
 REDIS_HOST = os.getenv("REDIS_HOST")
@@ -138,8 +92,6 @@ async def get_redis():
 
 
 RedisDep = Annotated[redis.Redis, Depends(get_redis)]
-
-llm_client = LLMClient()
 
 
 def create_batches(input_texts: set[str]) -> list[list[str]]:
@@ -265,12 +217,28 @@ async def get_book_detail(request: Request, book_id: int, page: int = 1, limit: 
         request=request, name="book_detail.html", context={**context, "page": page, "pages": pages}
     )
 
+@app.post("/api/v1/chapter/translate/{chapter_id}", response_class=HTMLResponse)
+async def translate_chapter(chapter_id: int):
+    await queue.add(
+        "translate_chapter",
+        {
+            "chapter_id": chapter_id,
+        },
+        {
+            "attempts": 3,  # Total attempts, including the first try
+            "backoff": {
+                "type": "exponential",
+                "delay": 1000,  # 1s, then 2s, then ...
+            },
+        },
+    )
+    return {"message": "translating, please wait"}
+
 
 @app.get("/api/v1/chapter/{book_id}/{chapter_index}", response_class=HTMLResponse)
 async def get_chapter_detail(request: Request, book_id: int, chapter_index: int, r: RedisDep):
-    context = await find_chapter_detail_by_id(book_id, chapter_index)
-    paragraphs = context["chapter"].content.split("\n")
-
+    context = await find_chapter_detail_by_book_index(book_id, chapter_index)
+    content = context["chapter"].content or context["chapter"].raw
     chapter_indices = await get_chapter_indices(book_id, r)
     index = bisect.bisect_left(chapter_indices, chapter_index, key=lambda x: x["index"])
 
@@ -283,7 +251,7 @@ async def get_chapter_detail(request: Request, book_id: int, chapter_index: int,
     return templates.TemplateResponse(
         request=request,
         name="chapter.html",
-        context={**context, "paragraphs": paragraphs, "prev_index": prev, "next_index": next},
+        context={**context, "paragraphs": content.split("\n"), "prev_index": prev, "next_index": next},
     )
 
 
