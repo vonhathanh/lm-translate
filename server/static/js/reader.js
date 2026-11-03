@@ -22,37 +22,62 @@
     aa = document.getElementById("aa"),
     panel = document.getElementById("settings");
 
-    // Expose the function globally to the window object so HTML inline click handlers can find it
-    window.handleChapterTranslation = async function (btnElement) {
-      if (!btnElement) return;
+  async function fetchTranslationStatus(chapterId) {
+    try {
+      var response = await fetch("/api/v1/status/chapter/" + encodeURIComponent(chapterId), {
+        method: "GET",
+      });
 
-      const chapterId = btnElement.dataset.chapterId;
-      console.log('Translating chapter:', chapterId);
-
-      // 1. UI Feedback: Disable button and show loading text
-      btnElement.disabled = true;
-      const originalText = btnElement.textContent;
-      btnElement.textContent = 'Đang dịch...';
-
-      try {
-          // 2. Network Request
-          var response = await fetch('/api/v1/translate/chapter/' + encodeURIComponent(chapterId), {
-          method: 'POST'
-          });
-
-          if (!response.ok) {
-          throw new Error('Không thể dịch chương (HTTP ' + response.status + ').');
-          }
-
-      } catch (error) {
-          console.error('Translation error:', error);
-          alert('Có lỗi xảy ra khi dịch: ' + error.message);
-
-          // 3. Fallback: Re-enable the button on failure so user can try again
-          btnElement.disabled = false;
-          btnElement.textContent = originalText;
+      if (!response.ok) {
+        throw new Error("Không thể dịch chương (HTTP " + response.status + ").");
       }
-    };
+      const responseJson = await response.json();
+
+      if (responseJson.status === "translated") {
+        window.location.reload();
+        return;
+      } else console.log("Translation status:", responseJson.status);
+      setTimeout(() => fetchTranslationStatus(chapterId), 5000);
+    } catch (error) {
+      alert("Có lỗi xảy ra khi dịch: " + error);
+    }
+  }
+
+  var translationStatusButton = document.getElementById("translate-chapter-status");
+  if (translationStatusButton) {
+    const chapterId = translationStatusButton.dataset.chapterId;
+    setTimeout(() => fetchTranslationStatus(chapterId), 5000);
+  }
+
+  // Expose the function globally to the window object so HTML inline click handlers can find it
+  window.handleChapterTranslation = async function (btnElement) {
+    if (!btnElement) return;
+
+    const chapterId = btnElement.dataset.chapterId;
+    console.log("Translating chapter:", chapterId);
+
+    // 1. UI Feedback: Disable button and show loading text
+    btnElement.disabled = true;
+    const originalText = btnElement.textContent;
+    btnElement.textContent = "Đang dịch...";
+
+    try {
+      var response = await fetch("/api/v1/translate/chapter/" + encodeURIComponent(chapterId), {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Không thể dịch chương (HTTP " + response.status + ").");
+      }
+    } catch (error) {
+      console.error("Translation error:", error);
+      alert("Có lỗi xảy ra khi dịch: " + error.message);
+
+      // 3. Fallback: Re-enable the button on failure so user can try again
+      btnElement.disabled = false;
+      btnElement.textContent = originalText;
+    }
+  };
 
   /* Settings panel */
   function setPanel(open) {

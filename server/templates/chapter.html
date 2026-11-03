@@ -30,7 +30,7 @@
   <h2>Chương {{ chapter.index }} – {{ chapter.title }}</h2>
   <p class="reader-meta">
     {% if chapter.status == 'translating' %}
-      <span class="badge badge-warning">Đang dịch...</span>
+      <button class="btn btn-primary" id="translate-chapter-status" data-chapter-id="{{ chapter.id }}" disabled>Đang dịch...</button>
     {% elif chapter.status == 'raw' %}
       <button class="btn btn-primary" id="translate-chapter" data-chapter-id="{{ chapter.id }}" onclick="handleChapterTranslation(this)">Dịch Chương Này</button>
     {% endif %}
