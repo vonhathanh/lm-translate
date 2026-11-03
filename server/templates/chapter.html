@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ chapter.title }} – {{ book.title }}{% endblock %}
 {% block body_class %}is-reader{% endblock %}
-
+{% block scripts %}<script src="{{ url_for('static', path='js/reader.js') }}"></script>{% endblock %}
 {% block header %}
 <header class="reader-bar" id="bar">
   <a class="icon-btn" href="{{ url_for('get_book_detail', book_id=book.id) }}" aria-label="Về trang truyện">
@@ -29,7 +29,11 @@
 <article class="reader">
   <h1>Chương {{ chapter.index }} – {{ chapter.title }}</h1>
   <p class="reader-meta">
-    {{ chapter.author or book.author }} – {{ chapter.word_count }} chữ{% if chapter.updated_at %} – cập nhật {{ chapter.updated_at }}{% endif %}
+    {% if chapter.status == 'translating' %}
+      <span class="badge badge-warning">Đang dịch...</span>
+    {% elif chapter.status == 'raw' %}
+      <button class="btn btn-primary" id="translate-chapter" data-chapter-id="{{ chapter.id }}" onclick="handleChapterTranslation(this)">Dịch Chương Này</button>
+    {% endif %}
   </p>
   <div class="prose">
     {% for p in paragraphs %}<p>{{ p }}</p>
@@ -53,5 +57,3 @@
   {% endif %}
 </nav>
 {% endblock %}
-
-{% block scripts %}<script src="{{ url_for('static', path='js/reader.js') }}"></script>{% endblock %}
