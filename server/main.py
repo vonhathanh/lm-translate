@@ -26,6 +26,7 @@ from database import (
     find_book_by_id,
     find_book_detail_by_id,
     find_chapter,
+    find_chapter_by_id,
     find_chapter_detail_by_book_index,
     find_chapter_indices,
     update_chapter,
@@ -55,7 +56,7 @@ logger = logging.getLogger(__name__)
 REDIS_HOST = os.getenv("REDIS_HOST")
 QUEUE_NAME = "fanqie-translation-queue"
 queue = Queue(QUEUE_NAME, {"connection": f"redis://{REDIS_HOST}:6379"})
-worker = Worker(QUEUE_NAME, process, {"connection": f"redis://{REDIS_HOST}:6379"})
+worker = Worker(QUEUE_NAME, process, {"connection": f"redis://{REDIS_HOST}:6379", "autorun": False})
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -67,6 +68,7 @@ async def lifespan(app: FastAPI):
         db=0,
         decode_responses=True,  # Automatically converts bytes to strings
     )
+    asyncio.ensure_future(worker.run())
     yield
     await app.state.redis_pool.disconnect()
     await queue.close()
@@ -329,6 +331,18 @@ async def get_chapter_detail(request: Request, book_id: int, chapter_index: int,
         name="chapter.html",
         context={**context, "paragraphs": content.split("\n"), "prev_index": prev, "next_index": next},
     )
+
+
+@app.get("/api/v1/status/chapter/{chapter_id}")
+async def get_chapter_status(chapter_id: int):
+    chapter = await find_chapter_by_id(chapter_id)
+    if not chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Chapter with id {chapter_id} not found",
+        )
+    return {"status": chapter.status}
+
 
 
 @app.post("/api/v1/translate/html")
