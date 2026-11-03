@@ -36,7 +36,7 @@
 
       try {
           // 2. Network Request
-          var response = await fetch('/api/v1/chapter/translate/' + encodeURIComponent(chapterId), {
+          var response = await fetch('/api/v1/translate/chapter/' + encodeURIComponent(chapterId), {
           method: 'POST'
           });
 

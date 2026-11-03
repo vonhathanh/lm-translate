@@ -99,6 +99,11 @@ async def find_book(title: str):
         statement = select(Book).where(Book.title == title)
         return (await session.exec(statement)).first()
 
+async def find_book_by_id(book_id: int):
+    async with SessionLocal() as session:
+        statement = select(Book).where(Book.id == book_id)
+        return (await session.exec(statement)).first()
+
 
 async def find_book_detail_by_id(book_id: int):
     async with SessionLocal() as session:

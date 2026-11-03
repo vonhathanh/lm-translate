@@ -29,12 +29,14 @@ from database import (
     create_db_and_tables,
     find_all_books,
     find_book,
+    find_book_by_id,
     find_book_detail_by_id,
+    find_chapter,
     find_chapter_detail_by_book_index,
     find_chapter_indices,
     update_chapter,
 )
-from dto import HtmlPageTranslationRequest
+from dto import HtmlPageTranslationRequest, TranslateBookRequest
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from translation_service import llm_client
@@ -261,7 +263,7 @@ async def insert_raw_fanqie_novel(
             detail="Could not decode file. Please ensure it is UTF-8 encoded.",
         )
 
-@app.post("/api/v1/chapter/translate/{chapter_id}")
+@app.post("/api/v1/translate/chapter/{chapter_id}")
 async def translate_chapter(chapter_id: int):
     await queue.add(
         "translate_chapter",
@@ -277,6 +279,37 @@ async def translate_chapter(chapter_id: int):
         },
     )
     await update_chapter(chapter_id, status="translating")
+    return {"message": "translating, please wait"}
+
+@app.post("/api/v1/translate/book/{book_id}")
+async def translate_chapters(book_id: int, request: TranslateBookRequest, redis: RedisDep):
+    book = await find_book_by_id(book_id)
+    if not book:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Book with id {book_id} not found",
+        )
+    chapter_indices = await get_chapter_indices(book_id, redis)
+    for index in chapter_indices:
+        if request.start_index <= index["index"] <= request.end_index:
+            chapter = await find_chapter(book_id, index["index"])
+            if chapter.status != "raw":
+                logger.info(f"chapter {chapter.id} already translated or translating, skipping...")
+                continue
+            await queue.add(
+                "translate_chapter",
+                {
+                    "chapter_id": chapter.id,
+                },
+                {
+                    "attempts": 3,  # Total attempts, including the first try
+                    "backoff": {
+                        "type": "exponential",
+                        "delay": 1000,  # 1s, then 2s, then ...
+                    },
+                },
+            )
+            await update_chapter(chapter.id, status="translating")
     return {"message": "translating, please wait"}
 
 
@@ -300,24 +333,7 @@ async def get_chapter_detail(request: Request, book_id: int, chapter_index: int,
     )
 
 
-async def get_chapter_indices(book_id: int, r: RedisDep):
-    redis_key = f"book_{book_id}:index"
-    chapter_indices = await r.get(redis_key)
-    if not chapter_indices:
-        chapter_indices = await find_chapter_indices(book_id)
-        if not chapter_indices:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Can't find chapter indices",
-            )
-        # convert sql model row into dict
-        chapter_indices = [dict(row._mapping) for row in chapter_indices]
-        await r.set(redis_key, json.dumps(chapter_indices))
-    else:
-        chapter_indices = json.loads(chapter_indices)
-    return chapter_indices
-
-@app.post("/api/v1/translate-html")
+@app.post("/api/v1/translate/html")
 async def translate_html_page(request: HtmlPageTranslationRequest):
     print(
         "Received translation request for model:",
@@ -355,7 +371,7 @@ async def translate_html_page(request: HtmlPageTranslationRequest):
     return {"translatedText": new_html}
 
 
-@app.post("/api/v1/translate-fanqie-novel")
+@app.post("/api/v1/translate/fanqie-novel")
 async def translate_fanqie_novel(
     file: UploadFile,
     start_index: Annotated[int | None, Form()] = None,
@@ -419,3 +435,22 @@ async def validate_translate_fanqie_novel_input(
 
     content = await file.read()
     return start_index, end_index, filename, content
+
+
+async def get_chapter_indices(book_id: int, r: RedisDep):
+    redis_key = f"book_{book_id}:index"
+    chapter_indices = await r.get(redis_key)
+    if not chapter_indices:
+        chapter_indices = await find_chapter_indices(book_id)
+        if not chapter_indices:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Can't find chapter indices",
+            )
+        # convert sql model row into dict
+        chapter_indices = [dict(row._mapping) for row in chapter_indices]
+        await r.set(redis_key, json.dumps(chapter_indices))
+    else:
+        chapter_indices = json.loads(chapter_indices)
+    # sample format: {'id': 296, 'index': 229, 'title': 'chapter_229'}
+    return chapter_indices

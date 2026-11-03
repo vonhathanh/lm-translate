@@ -7,5 +7,10 @@ class HtmlPageTranslationRequest(BaseModel):
     target_language: str
 
 
+class TranslateBookRequest(BaseModel):
+    start_index: int | None = 0
+    end_index: int | None = 2**32
+
+
 class TranslationOutput(BaseModel):
     items: list[str]
