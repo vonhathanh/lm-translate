@@ -28,6 +28,7 @@ from database import (
     find_book_detail_by_id,
     find_chapter_detail_by_book_index,
     find_chapter_indices,
+    update_chapter,
 )
 from dto import HtmlPageTranslationRequest
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, UploadFile, status
@@ -217,7 +218,7 @@ async def get_book_detail(request: Request, book_id: int, page: int = 1, limit: 
         request=request, name="book_detail.html", context={**context, "page": page, "pages": pages}
     )
 
-@app.post("/api/v1/chapter/translate/{chapter_id}", response_class=HTMLResponse)
+@app.post("/api/v1/chapter/translate/{chapter_id}")
 async def translate_chapter(chapter_id: int):
     await queue.add(
         "translate_chapter",
@@ -232,6 +233,7 @@ async def translate_chapter(chapter_id: int):
             },
         },
     )
+    await update_chapter(chapter_id, status="translating")
     return {"message": "translating, please wait"}
 
 
