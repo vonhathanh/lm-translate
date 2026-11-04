@@ -29,6 +29,7 @@ async def _process_job(job):
     else:
         raise ValueError("invalid job name")
 
+
 async def process(job, job_token):
     logger.info(f"Got new Job, id: {job.id}, Name: {job.name}")
     try:
@@ -52,24 +53,26 @@ async def translate_current_chapter(job):
             chapter.id,
             title=translated_result.title,
             content=translated_result.content,
-            status=ChapterStatus.translated
+            status=ChapterStatus.translated,
         )
         logger.info(f"translated chapter id: {chapter_id}, title: {translated_result.title}")
     else:
-        logger.error(f"translation failed for chapter id: {chapter.id}, result: {translated_result}")
-    
+        logger.error(
+            f"translation failed for chapter id: {chapter.id}, result: {translated_result}"
+        )
+
 
 async def translate_new_chapter(job):
     book_title = job.data["book_title"]
     chapter_index = job.data["chapter_index"]
-    
+
     book = await find_book(book_title)
     if book is None:
         book = await add_book(Book(title=book_title))
         logger.info(f"added new book, id: {book.id}")
-    
+
     logger.info(f"found book, id= {book.id}")
-    
+
     chapter = await find_chapter(book.id, chapter_index)
     if chapter:
         logger.info(
@@ -77,7 +80,7 @@ async def translate_new_chapter(job):
         )
         return
     logger.info(f"chapter with index={chapter_index} not found, translating...")
-    
+
     translated_result = await llm_client.translate_single_chapter(
         job.data["content"], os.getenv("LLM_MODEL", "deepseek-flash")
     )
@@ -93,4 +96,6 @@ async def translate_new_chapter(job):
         )
         logger.info(f"added new chapter, index: {chapter.index}, title: {chapter.title}")
     else:
-        logger.error(f"translation failed for book: {book_title}, chapter index: {chapter_index}, result: {translated_result}")
+        logger.error(
+            f"translation failed for book: {book_title}, chapter index: {chapter_index}, result: {translated_result}"
+        )
