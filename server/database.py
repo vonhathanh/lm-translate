@@ -12,6 +12,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 logger = logging.getLogger(__name__)
 
+
 class Base(SQLModel, table=False):
     id: int | None = Field(default=None, primary_key=True)
     created_at: datetime = Field(default_factory=func.now)
@@ -35,10 +36,9 @@ class ChapterStatus(str, enum.Enum):
     translating = "translating"
     translated = "translated"
 
+
 class Chapter(Base, table=True):
-    __table_args__ = (
-        UniqueConstraint("book_id", "index", name="uq_chapter_book_index"),
-    )
+    __table_args__ = (UniqueConstraint("book_id", "index", name="uq_chapter_book_index"),)
     index: int | None
     title: str
     content: str | None
@@ -82,6 +82,7 @@ async def add_chapter(chapter: Chapter):
         await session.flush()
         return chapter
 
+
 async def add_chapters(chapters: list[Chapter]):
     async with SessionLocal() as session, session.begin():
         session.add_all(chapters)
@@ -100,6 +101,7 @@ async def find_book(title: str):
     async with SessionLocal() as session:
         statement = select(Book).where(Book.title == title)
         return (await session.exec(statement)).first()
+
 
 async def find_book_by_id(book_id: int):
     async with SessionLocal() as session:
@@ -170,8 +172,12 @@ async def find_chapter_detail_by_book_index(book_id: int, chapter_index: int):
 
 
 async def find_chapter_indices(book_id: int):
-     async with SessionLocal() as session:
-        statement = select(Chapter.id, Chapter.index, Chapter.title).where(Chapter.book_id == book_id).order_by(Chapter.index)
+    async with SessionLocal() as session:
+        statement = (
+            select(Chapter.id, Chapter.index, Chapter.title)
+            .where(Chapter.book_id == book_id)
+            .order_by(Chapter.index)
+        )
         return (await session.exec(statement)).all()
 
 

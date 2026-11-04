@@ -1,4 +1,5 @@
-from dotenv import load_dotenv  # noqa: I001
+from dotenv import load_dotenv
+
 load_dotenv()
 
 import asyncio
@@ -57,6 +58,7 @@ REDIS_HOST = os.getenv("REDIS_HOST")
 QUEUE_NAME = "fanqie-translation-queue"
 queue = Queue(QUEUE_NAME, {"connection": f"redis://{REDIS_HOST}:6379"})
 worker = Worker(QUEUE_NAME, process, {"connection": f"redis://{REDIS_HOST}:6379", "autorun": False})
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -223,6 +225,7 @@ async def get_book_detail(request: Request, book_id: int, page: int = 1, limit: 
         request=request, name="book_detail.html", context={**context, "page": page, "pages": pages}
     )
 
+
 @app.post("/api/v1/book/fanqie/raw")
 async def insert_raw_fanqie_novel(
     r: RedisDep,
@@ -252,7 +255,14 @@ async def insert_raw_fanqie_novel(
             elif len(chapters[i]) < 20:
                 continue
             if end_index >= chapter_index >= start_index:
-                rows.append(Chapter(title=f"chapter_{chapter_index}", raw=chapters[i], index=chapter_index, book_id=book.id))
+                rows.append(
+                    Chapter(
+                        title=f"chapter_{chapter_index}",
+                        raw=chapters[i],
+                        index=chapter_index,
+                        book_id=book.id,
+                    )
+                )
         await add_chapters(rows)
         await r.delete(f"book_{book.id}:index")
         return {"message": f"successfully inserted {len(rows)} chapters into the database"}
@@ -261,6 +271,7 @@ async def insert_raw_fanqie_novel(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Could not decode file. Please ensure it is UTF-8 encoded.",
         )
+
 
 @app.post("/api/v1/translate/chapter/{chapter_id}")
 async def translate_chapter(chapter_id: int):
@@ -279,6 +290,7 @@ async def translate_chapter(chapter_id: int):
     )
     await update_chapter(chapter_id, status="translating")
     return {"message": "translating, please wait"}
+
 
 @app.post("/api/v1/translate/book/{book_id}")
 async def translate_chapters(book_id: int, request: TranslateBookRequest, redis: RedisDep):
@@ -325,11 +337,16 @@ async def get_chapter_detail(request: Request, book_id: int, chapter_index: int,
         prev = chapter_indices[index - 1]["index"]
     if index < len(chapter_indices) - 1:
         next = chapter_indices[index + 1]["index"]
-    
+
     return templates.TemplateResponse(
         request=request,
         name="chapter.html",
-        context={**context, "paragraphs": content.split("\n"), "prev_index": prev, "next_index": next},
+        context={
+            **context,
+            "paragraphs": content.split("\n"),
+            "prev_index": prev,
+            "next_index": next,
+        },
     )
 
 
@@ -342,7 +359,6 @@ async def get_chapter_status(chapter_id: int):
             detail=f"Chapter with id {chapter_id} not found",
         )
     return {"status": chapter.status}
-
 
 
 @app.post("/api/v1/translate/html")
@@ -390,7 +406,9 @@ async def validate_translate_fanqie_novel_input(
 ):
     start_index = 0 if start_index is None else start_index
     end_index = 2**32 if end_index is None else end_index
+
     logger.info(f"{start_index=}, {end_index=}")
+
     # ensure it's a text file
     if not file.filename.endswith(".txt"):
         raise HTTPException(
@@ -405,7 +423,9 @@ async def validate_translate_fanqie_novel_input(
 
 async def get_chapter_indices(book_id: int, r: RedisDep):
     redis_key = f"book_{book_id}:index"
+
     chapter_indices = await r.get(redis_key)
+
     if not chapter_indices:
         chapter_indices = await find_chapter_indices(book_id)
         if not chapter_indices:
