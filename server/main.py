@@ -14,7 +14,6 @@ from contextlib import asynccontextmanager
 from typing import Annotated
 
 import redis.asyncio as redis
-from bs4 import BeautifulSoup, NavigableString
 from bullmq import Queue, Worker
 from database import (
     Book,
@@ -38,11 +37,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from translation_service import llm_client
+from translation_service import (
+    create_batches,
+    llm_client,
+    map_translated_text_to_html,
+    parse_text_from_html,
+)
 from worker import process
-
-MAX_TOKENS_PER_BATCH = 500
-
 
 logging.basicConfig(
     level=logging.INFO,  # Set minimum log level to capture
@@ -100,91 +101,6 @@ async def get_redis():
 
 
 RedisDep = Annotated[redis.Redis, Depends(get_redis)]
-
-
-def create_batches(input_texts: set[str]) -> list[list[str]]:
-    batches = []
-    current_batch = []
-    current_token_count = 0
-
-    for text in input_texts:
-        token_count = len(text.split())  # Simple token count based on words
-
-        if current_token_count + token_count >= MAX_TOKENS_PER_BATCH:
-            batches.append(current_batch)
-            current_batch = []
-            current_token_count = 0
-
-        current_batch.append(text)
-        current_token_count += token_count
-
-    if current_batch:
-        batches.append(current_batch)
-
-    print(f"Created {len(batches)} batches from {len(input_texts)} unique input texts.")
-
-    return batches
-
-
-def parse_text_from_html(html: str) -> tuple[BeautifulSoup, set[str]]:
-    """
-    \d → digits (0-9)
-    \W → non-word characters (special characters)
-    _ → underscore (because _ is considered a word character in regex)
-    + → one or more characters
-    ^...$ → match the whole string
-
-    This matches:
-        only numbers → "12345"
-        only special chars → "@#$%"
-        mix of numbers + special chars → "123@#"
-
-    This does NOT match:
-        English letters → "abc"
-        Vietnamese → "xin chào"
-        Chinese → "你好"
-        Japanese → "こんにちは"
-    """
-    PATTERN = r"^[\d\W_]+$"
-
-    soup = BeautifulSoup(html, "html.parser")
-    input_texts = set()
-    for element in soup.find_all():
-        if element.name in ["script", "style"]:
-            continue
-        direct_texts = [
-            t.strip().lower()
-            for t in element.contents
-            if isinstance(t, NavigableString)
-            and t.strip()
-            and not bool(re.match(PATTERN, t.strip()))
-        ]
-        if direct_texts:
-            input_texts.update(direct_texts)
-    return soup, input_texts
-
-
-def map_translated_text_to_html(
-    soup: BeautifulSoup,
-    input_batches: list[list[str]],
-    translate_results: list[list[str]],
-) -> str:
-    translated_text = {}
-    for i in range(len(translate_results)):
-        for j in range(len(input_batches[i])):
-            translated_text[input_batches[i][j]] = translate_results[i][j]
-
-    for text_node in soup.find_all(string=True):
-        normalized_text = text_node.strip().lower()
-
-        if not normalized_text or normalized_text not in translated_text:
-            continue
-
-        translated = translated_text[normalized_text]
-        # Replace text node
-        text_node.replace_with(text_node.replace(text_node.text, translated))
-
-    return str(soup)
 
 
 @app.get("/")
