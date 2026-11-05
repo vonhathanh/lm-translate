@@ -90,6 +90,12 @@ async def add_chapters(chapters: list[Chapter]):
         return chapters
 
 
+async def update_book(book_id: int, **kwargs):
+    async with SessionLocal() as session, session.begin():
+        statement = update(Book).where(Book.id == book_id).values(**kwargs)
+        await session.exec(statement)
+
+
 async def add_book(book: Book):
     async with SessionLocal() as session, session.begin():
         session.add(book)

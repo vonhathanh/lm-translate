@@ -29,9 +29,10 @@ from database import (
     find_chapter_by_id,
     find_chapter_detail_by_book_index,
     find_chapter_indices,
+    update_book,
     update_chapter,
 )
-from dto import HtmlPageTranslationRequest, TranslateBookRequest
+from dto import HtmlPageTranslationRequest, TranslateBookRequest, UpdateBookRequest
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
@@ -191,6 +192,18 @@ async def insert_raw_fanqie_novel(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Could not decode file. Please ensure it is UTF-8 encoded.",
         )
+
+
+@app.patch("/api/v1/book/{book_id}")
+async def update_book_details(book_id: int, book: UpdateBookRequest):
+    existing_book = await find_book_by_id(book_id)
+    if not existing_book:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Book with id {book_id} not found",
+        )
+    await update_book(book_id, **book.model_dump(exclude_unset=True))
+    return {"message": "Book updated successfully"}
 
 
 @app.post("/api/v1/translate/chapter/{chapter_id}")

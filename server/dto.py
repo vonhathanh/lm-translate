@@ -14,3 +14,11 @@ class TranslateBookRequest(BaseModel):
 
 class TranslationOutput(BaseModel):
     items: list[str]
+
+
+class UpdateBookRequest(BaseModel):
+    title: str | None = None
+    author: str | None = None
+    description: str | None = None
+    genres: list[str] | None = None
+    cover_image: str | None = None
