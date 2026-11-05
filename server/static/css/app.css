@@ -2,7 +2,7 @@
 :root {
   --bg: #F4F5F2; --surface: #FFFFFF; --ink: #1B2220; --muted: #5E6A66; --line: #DADFDB;
   --accent: #1D6B63; --accent-ink: #FFFFFF;
-  --serif: 'Literata', Georgia, 'Times New Roman', serif;
+  --serif: Georgia, 'Literata', 'Times New Roman', serif;
   --sans: 'Be Vietnam Pro', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --read-size: 18px;
   --radius: 10px;
