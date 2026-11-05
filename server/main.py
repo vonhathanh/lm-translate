@@ -250,7 +250,11 @@ async def insert_raw_fanqie_novel(
         rows = []
         for i in range(1, len(chapters)):
             if re.match(chapter_index_regex, chapters[i]):
-                chapter_index = int(chapters[i][1:-1])
+                next_chapter_index = int(chapters[i][1:-1])
+                if next_chapter_index <= chapter_index:
+                    chapter_index += 1
+                else:
+                    chapter_index = next_chapter_index
                 continue
             elif len(chapters[i]) < 20:
                 continue
@@ -259,7 +263,7 @@ async def insert_raw_fanqie_novel(
                     Chapter(
                         title=f"chapter_{chapter_index}",
                         raw=chapters[i],
-                        index=chapter_index,
+                        index=chapter_index,                        
                         book_id=book.id,
                     )
                 )
