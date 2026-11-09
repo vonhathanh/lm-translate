@@ -48,6 +48,16 @@ class Chapter(Base, table=True):
     status: ChapterStatus = Field(default=ChapterStatus.raw, nullable=False)
 
 
+class Dictionary(Base, table=False):
+    source_text: str
+    target_text: str
+    context: str | None
+
+
+class ZhViDictionary(Dictionary, table=True):
+    __tablename__ = "cz_vi_dictionary"
+
+
 engine = create_async_engine(
     URL.create(
         drivername="postgresql+asyncpg",
