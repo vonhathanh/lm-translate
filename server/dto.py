@@ -1,3 +1,4 @@
+from database import ChapterStatus
 from pydantic import BaseModel
 
 
@@ -22,3 +23,17 @@ class UpdateBookRequest(BaseModel):
     description: str | None = None
     genres: list[str] | None = None
     cover_image: str | None = None
+
+
+class UpdateChapterRequest(BaseModel):
+    index: int | None
+    title: str | None
+    content: str | None
+    raw: str | None
+    status: ChapterStatus | None
+
+
+class TranslateRequest(BaseModel):
+    text: str
+    model: str
+    target_language: str | None = None

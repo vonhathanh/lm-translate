@@ -22,32 +22,32 @@
     aa = document.getElementById("aa"),
     panel = document.getElementById("settings");
 
-  async function fetchTranslationStatus(chapterId) {
-    try {
-      var response = await fetch("/api/v1/status/chapter/" + encodeURIComponent(chapterId), {
-        method: "GET",
-      });
+//   async function fetchTranslationStatus(chapterId) {
+//     try {
+//       var response = await fetch("/api/v1/status/chapter/" + encodeURIComponent(chapterId), {
+//         method: "GET",
+//       });
 
-      if (!response.ok) {
-        throw new Error("Không thể dịch chương (HTTP " + response.status + ").");
-      }
-      const responseJson = await response.json();
+//       if (!response.ok) {
+//         throw new Error("Không thể dịch chương (HTTP " + response.status + ").");
+//       }
+//       const responseJson = await response.json();
 
-      if (responseJson.status === "translated") {
-        window.location.reload();
-        return;
-      } else console.log("Translation status:", responseJson.status);
-      setTimeout(() => fetchTranslationStatus(chapterId), 5000);
-    } catch (error) {
-      alert("Có lỗi xảy ra khi dịch: " + error);
-    }
-  }
+//       if (responseJson.status === "translated") {
+//         window.location.reload();
+//         return;
+//       } else console.log("Translation status:", responseJson.status);
+//       setTimeout(() => fetchTranslationStatus(chapterId), 5000);
+//     } catch (error) {
+//       alert("Có lỗi xảy ra khi dịch: " + error);
+//     }
+//   }
 
-  var translationStatusButton = document.getElementById("translate-chapter-status");
-  if (translationStatusButton) {
-    const chapterId = translationStatusButton.dataset.chapterId;
-    setTimeout(() => fetchTranslationStatus(chapterId), 5000);
-  }
+//   var translationStatusButton = document.getElementById("translate-chapter-status");
+//   if (translationStatusButton) {
+//     const chapterId = translationStatusButton.dataset.chapterId;
+//     setTimeout(() => fetchTranslationStatus(chapterId), 5000);
+//   }
 
   // Expose the function globally to the window object so HTML inline click handlers can find it
   window.handleChapterTranslation = async function (btnElement) {
@@ -69,6 +69,8 @@
       if (!response.ok) {
         throw new Error("Không thể dịch chương (HTTP " + response.status + ").");
       }
+      window.location.reload();
+      
     } catch (error) {
       console.error("Translation error:", error);
       alert("Có lỗi xảy ra khi dịch: " + error.message);

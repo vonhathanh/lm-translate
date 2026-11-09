@@ -18,6 +18,7 @@ from bullmq import Queue, Worker
 from database import (
     Book,
     Chapter,
+    ChapterStatus,
     add_book,
     add_chapters,
     create_db_and_tables,
@@ -32,7 +33,13 @@ from database import (
     update_book,
     update_chapter,
 )
-from dto import HtmlPageTranslationRequest, TranslateBookRequest, UpdateBookRequest
+from dto import (
+    HtmlPageTranslationRequest,
+    TranslateBookRequest,
+    TranslateRequest,
+    UpdateBookRequest,
+    UpdateChapterRequest,
+)
 from fastapi import Depends, FastAPI, Form, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
@@ -180,7 +187,7 @@ async def insert_raw_fanqie_novel(
                     Chapter(
                         title=f"chapter_{chapter_index}",
                         raw=chapters[i],
-                        index=chapter_index,                        
+                        index=chapter_index,
                         book_id=book.id,
                     )
                 )
@@ -208,21 +215,44 @@ async def update_book_details(book_id: int, book: UpdateBookRequest):
 
 @app.post("/api/v1/translate/chapter/{chapter_id}")
 async def translate_chapter(chapter_id: int):
-    await queue.add(
-        "translate_chapter",
-        {
-            "chapter_id": chapter_id,
-        },
-        {
-            "attempts": 3,  # Total attempts, including the first try
-            "backoff": {
-                "type": "exponential",
-                "delay": 1000,  # 1s, then 2s, then ...
-            },
-        },
+    chapter = await find_chapter_by_id(chapter_id)
+    if not chapter:
+        logger.error(f"chapter with id={chapter_id} not found, skipping this job!")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"chapter with id={chapter_id} not found, skipping!",
+        )
+    translated_result = await llm_client.translate_single_chapter(
+        chapter.raw, os.getenv("LLM_MODEL", "deepseek-flash")
     )
-    await update_chapter(chapter_id, status="translating")
-    return {"message": "translating, please wait"}
+    if translated_result:
+        chapter = await update_chapter(
+            chapter.id,
+            title=translated_result.title,
+            content=translated_result.content,
+            status=ChapterStatus.translated,
+        )
+        return {
+            "message": "OK",
+            "chapter_id": chapter_id,
+            "title": translated_result.title,
+            "content": translated_result.content,
+        }
+    else:
+        logger.error(
+            f"translation failed for chapter id: {chapter.id}, result: {translated_result}"
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"translation failed for chapter id: {chapter.id}, result: {translated_result}",
+        )
+
+    
+
+
+@app.post("/api/v1/translate/hachimi")
+async def translate_text(body: TranslateRequest):
+    return await llm_client.hachimi_translate(body.text)
 
 
 @app.post("/api/v1/translate/book/{book_id}")
@@ -281,6 +311,18 @@ async def get_chapter_detail(request: Request, book_id: int, chapter_index: int,
             "next_index": next,
         },
     )
+
+
+@app.patch("/api/v1/chapter/{chapter_id}")
+async def update_chapter_details(chapter_id: int, chapter: UpdateChapterRequest):
+    existing_chapter = await find_chapter_by_id(chapter_id)
+    if not existing_chapter:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Chapter with id {chapter_id} not found",
+        )
+    await update_chapter(chapter_id, **chapter.model_dump(exclude_unset=True))
+    return {"message": "Chapter updated successfully"}
 
 
 @app.get("/api/v1/status/chapter/{chapter_id}")
