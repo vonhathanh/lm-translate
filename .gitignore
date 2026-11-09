@@ -10,3 +10,5 @@ __pycache__/*
 .env.docker
 
 alembic.ini
+
+server/models

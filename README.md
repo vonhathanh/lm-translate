@@ -36,3 +36,6 @@ Run `alembic upgrade head`
     `docker run -d --network localnet --name lm-translate -p 5000:5000 lm-translate`
 
     Or just using a docker GUI to run the newly built image
+
+# Monitoring:
+Run `npx @bull-board/cli -r redis://localhost:6379`
