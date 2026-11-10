@@ -247,8 +247,6 @@ async def translate_chapter(chapter_id: int):
             detail=f"translation failed for chapter id: {chapter.id}, result: {translated_result}",
         )
 
-    
-
 
 @app.post("/api/v1/translate/hachimi")
 async def translate_text(body: TranslateRequest):
@@ -410,7 +408,7 @@ async def get_chapter_indices(book_id: int, r: RedisDep):
             )
         # convert sql model row into dict
         chapter_indices = [dict(row._mapping) for row in chapter_indices]
-        await r.set(redis_key, json.dumps(chapter_indices))
+        await r.set(redis_key, json.dumps(chapter_indices), ex=600)
     else:
         chapter_indices = json.loads(chapter_indices)
     # sample format: {'id': 296, 'index': 229, 'title': 'chapter_229'}
