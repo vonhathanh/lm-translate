@@ -1,19 +1,9 @@
+import { load, save } from "./common.js";
+
 (function () {
   var d = document.documentElement,
     KEY = "reader";
-  function load() {
-    try {
-      return JSON.parse(localStorage.getItem(KEY)) || {};
-    } catch (e) {
-      return {};
-    }
-  }
-  function save(s) {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(s));
-    } catch (e) {}
-  }
-  var state = load();
+  var state = load(KEY);
   var size = state.size || parseInt(getComputedStyle(d).getPropertyValue("--read-size"), 10) || 18;
 
   var bar = document.getElementById("bar"),
