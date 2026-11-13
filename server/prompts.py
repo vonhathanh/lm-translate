@@ -17,7 +17,7 @@ Dịch đoạn text tiếng Trung sau đây sang tiếng Việt. Tuân thủ ngh
 
 2. Danh xưng và ngôi thứ: Giữ nguyên cách xưng hô đặc trưng (hắn, y, nàng, bọn cường giả, mỗ...). Không dịch thành anh/chị/ông/bà kiểu hiện đại.
 
-3. Hệ thống tu luyện: Tuyệt đối giữ nguyên tên cảnh giới (Luyện Khí, Trúc Cơ, Nguyên Anh...), tên công pháp, pháp bảo, đan dược.
+3. Hệ thống tu luyện: Tuyệt đối giữ nguyên tên cảnh giới (Luyện Khí, Trúc Cơ, Nguyên Anh...), tên công pháp, pháp bảo, đan dược, môn phái, vũ khí, địa danh... Không dịch sang tiếng Việt.
 
 4. Thành ngữ, cụm từ: Dịch sang âm Hán Việt tương đương nếu cụm từ được dịch dễ hiểu và thường gặp trong truyện Trung Quốc, nếu không thì dịch nghĩa sát nhất.
 
