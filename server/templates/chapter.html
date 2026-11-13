@@ -3,7 +3,7 @@
 {% block body_class %}is-reader{% endblock %}
 {% block scripts %}<script src="{{ url_for('static', path='js/reader.js') }}"></script>{% endblock %}
 {% block header %}
-<header class="reader-bar" id="bar">
+<header class="reader-bar" id="bar" data-chapter-id="{{ chapter.id }}">
   <a class="icon-btn" href="{{ url_for('get_book_detail', book_id=book.id) }}" aria-label="Về trang truyện">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
   </a>
