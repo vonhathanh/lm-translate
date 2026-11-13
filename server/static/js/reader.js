@@ -18,6 +18,8 @@ import { load, save } from "./common.js";
     window.scrollTo(0, lastY);
   }
 
+  save(`book_${bar.dataset.bookId}`, { lastChapterIndex: bar.dataset.chapterIndex });
+
   // Expose the function globally to the window object so HTML inline click handlers can find it
   window.handleChapterTranslation = async function (btnElement) {
     if (!btnElement) return;
@@ -85,7 +87,7 @@ import { load, save } from "./common.js";
       state.theme = b.dataset.themeSet;
       markTheme();
     }
-    save(state);
+    save(KEY, state);
   });
   markTheme();
 
@@ -114,7 +116,7 @@ import { load, save } from "./common.js";
         requestAnimationFrame(onScroll);
       }
       state[`lastY-${chapterId}`] = window.scrollY;
-      save(state);
+      save(KEY, state);
     },
     { passive: true },
   );

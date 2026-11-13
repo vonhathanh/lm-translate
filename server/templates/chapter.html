@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 {% block title %}{{ chapter.title }} – {{ book.title }}{% endblock %}
 {% block body_class %}is-reader{% endblock %}
-{% block scripts %}<script src="{{ url_for('static', path='js/reader.js') }}"></script>{% endblock %}
+{% block scripts %}<script type="module" src="{{ url_for('static', path='js/reader.js') }}"></script>{% endblock %}
 {% block header %}
-<header class="reader-bar" id="bar" data-chapter-id="{{ chapter.id }}">
+<header class="reader-bar" id="bar" data-chapter-id="{{ chapter.id }}" data-chapter-index="{{ chapter.index }}" data-book-id="{{ book.id }}">
   <a class="icon-btn" href="{{ url_for('get_book_detail', book_id=book.id) }}" aria-label="Về trang truyện">
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
   </a>

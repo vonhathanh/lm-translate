@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "macros.html" import cover, pager %}
 {% block title %}{{ book.title }} – {{ super() }}{% endblock %}
-
+{% block scripts %}<script type="module" src="{{ url_for('static', path='js/book_details.js') }}"></script>{% endblock %}
 {% block content %}
 <article class="wrap detail">
   <a class="back" href="{{ url_for('get_all_books') }}">‹ Thư viện</a>
@@ -12,7 +12,7 @@
       <h1>{{ book.title }}</h1>
       <p class="muted">{{ book.author }} – {{ book.chapter_count }} chương</p>
       {% if book.chapter_count > 0 %}
-      <a class="btn btn-primary" href="{{ url_for('get_chapter_detail', book_id=book.id, chapter_index=1) }}">Đọc từ đầu</a>
+      <a class="btn btn-primary" id="start_reading_btn" data-book-id="{{ book.id }}">Đọc từ đầu</a>
       {% endif %}
     </div>
   </div>
